@@ -1,0 +1,33 @@
+from hummingbot.core.api_throttler.data_types import LinkedLimitWeightPair, RateLimit
+
+DEF_DOMAIN = "main"
+
+# REST endpoints
+BASE_PATH_URL = {
+    "main": "https://api.lbkex.com/",
+}
+
+PUBLIC_API_VERSION = "v2"
+
+# Public API endpoints
+SERVER_TIME_ENDPOINT = "/timestamp.do"
+TRADING_PAIRS_ENDPOINT = "/accuracy.do"
+
+# WSS endpoints
+WSS_URL = "wss://www.lbkex.net/ws/V2/"
+
+# Rate Limit Type
+CREATE_ORDER = "CREATE_ORDER"
+CANCEL_ORDER = "CANCEL_ORDER"
+OTHER_REQUESTS = "OTHER_REQUESTS"
+
+# Rate Limit time intervals
+TEN_SECONDS = 10
+
+RATE_LIMITS = [
+    RateLimit(limit_id=CREATE_ORDER, limit=500, time_interval=TEN_SECONDS),
+    RateLimit(limit_id=CANCEL_ORDER, limit=500, time_interval=TEN_SECONDS),
+    RateLimit(limit_id=OTHER_REQUESTS, limit=200, time_interval=TEN_SECONDS),
+    RateLimit(limit_id=SERVER_TIME_ENDPOINT, limit=200, time_interval=TEN_SECONDS),
+    RateLimit(limit_id=TRADING_PAIRS_ENDPOINT, limit=200, time_interval=TEN_SECONDS),
+]
