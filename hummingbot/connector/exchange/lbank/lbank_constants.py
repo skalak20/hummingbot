@@ -2,6 +2,15 @@ from hummingbot.core.api_throttler.data_types import LinkedLimitWeightPair, Rate
 
 DEF_DOMAIN = "main"
 
+RSA_STR = "RSA"
+HMACSHA256_STR = "HMACSHA256"
+API_HMACSHA = "HmacSHA256"
+
+ALLOW_METHOD = [
+    RSA_STR,
+    HMACSHA256_STR,
+]
+
 # REST endpoints
 BASE_PATH_URL = {
     "main": "https://api.lbkex.com/",

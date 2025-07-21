@@ -1,3 +1,7 @@
+import hashlib
+import random
+import string
+import time
 from typing import Any, Dict
 
 from pydantic import ConfigDict, Field, SecretStr
@@ -7,9 +11,26 @@ from hummingbot.client.config.config_data_types import BaseConnectorConfigMap
 CENTRALIZED = True
 
 
+def random_str() -> str:
+    num = string.ascii_letters + string.digits
+    return "".join(random.sample(num, 35))
+
+
+def build_md5(payload: dict) -> str:
+    """
+    @param payload: request form
+    @return:
+    """
+    params = [k + '=' + str(payload[k]) for k in sorted(payload.keys())]
+    params = '&'.join(params)
+    msg = hashlib.md5(params.encode("utf8")).hexdigest().upper()
+    return msg
+
+
 def is_exchange_information_valid(exchange_info: Dict[str, Any]) -> bool:
     """
     Verifies if a trading pair is enabled to operate with based on its exchange information
+
     :param exchange_info: the exchange information for a trading pair
     :return: True if the trading pair is enabled, False otherwise
     """

@@ -45,7 +45,7 @@ class LbankExchange(ExchangePyBase):
     def authenticator(self) -> AuthBase:
         return LbankAuth(
             api_key=self._api_key,
-            secret_key=self._secret_key)
+            api_secret=self._secret_key)
 
     @property
     def check_network_request_path(self) -> str:
