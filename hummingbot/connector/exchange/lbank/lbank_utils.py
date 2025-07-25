@@ -2,7 +2,7 @@ import hashlib
 import random
 import string
 import time
-from typing import Any, Dict
+from typing import Optional
 
 from pydantic import ConfigDict, Field, SecretStr
 
@@ -16,6 +16,10 @@ def random_str() -> str:
     return "".join(random.sample(num, 35))
 
 
+def get_timestamp() -> str:
+    return str(int(time.time() * 1000)).split(".", maxsplit=1)[0]
+
+
 def build_md5(payload: dict) -> str:
     """
     @param payload: request form
@@ -27,14 +31,14 @@ def build_md5(payload: dict) -> str:
     return msg
 
 
-def is_exchange_information_valid(exchange_info: Dict[str, Any]) -> bool:
+def is_exchange_information_valid(exchange_info: Optional[str]) -> bool:
     """
     Verifies if a trading pair is enabled to operate with based on its exchange information
 
     :param exchange_info: the exchange information for a trading pair
     :return: True if the trading pair is enabled, False otherwise
     """
-    return exchange_info.get("symbol", None) != None
+    return exchange_info != None
 
 
 def convert_from_exchange_trading_pair(exchange_trading_pair: str):

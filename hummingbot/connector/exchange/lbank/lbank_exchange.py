@@ -1,3 +1,5 @@
+import asyncio
+import logging
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
@@ -10,12 +12,11 @@ from hummingbot.connector.exchange.lbank.lbank_api_user_stream_data_source impor
 from hummingbot.connector.exchange.lbank.lbank_auth import LbankAuth
 from hummingbot.connector.exchange.lbank.lbank_utils import convert_from_exchange_trading_pair
 from hummingbot.connector.exchange_py_base import ExchangePyBase
-from hummingbot.connector.trading_rule import TradingRule
 from hummingbot.core.api_throttler.data_types import RateLimit
 from hummingbot.core.data_type.common import OrderType, TradeType
 from hummingbot.core.data_type.in_flight_order import InFlightOrder, OrderUpdate, TradeUpdate
 from hummingbot.core.data_type.order_book_tracker_data_source import OrderBookTrackerDataSource
-from hummingbot.core.data_type.trade_fee import TradeFeeBase
+from hummingbot.core.data_type.trade_fee import AddedToCostTradeFee
 from hummingbot.core.data_type.user_stream_tracker_data_source import UserStreamTrackerDataSource
 from hummingbot.core.web_assistant.auth import AuthBase
 from hummingbot.core.web_assistant.web_assistants_factory import WebAssistantsFactory
@@ -39,6 +40,7 @@ class LbankExchange(ExchangePyBase):
         self._secret_key = lbank_api_secret
         self._trading_pairs = trading_pairs
         self._trading_required = trading_required
+        self.logger().setLevel(level=logging.DEBUG)
         super().__init__(client_config_map)
 
     @property
@@ -81,7 +83,7 @@ class LbankExchange(ExchangePyBase):
 
     @property
     def trading_pairs(self) -> List[str]:
-        return self._trading_fees
+        return self._trading_pairs
 
     @property
     def trading_pairs_request_path(self) -> str:
@@ -94,12 +96,12 @@ class LbankExchange(ExchangePyBase):
     def supported_order_types(self) -> List[OrderType]:
         raise NotImplementedError
 
-    def _all_trade_updates_for_order(self, order: InFlightOrder) -> List[TradeUpdate]:
+    async def _all_trade_updates_for_order(self, order: InFlightOrder) -> List[TradeUpdate]:
         raise NotImplementedError
 
     def _create_order_book_data_source(self) -> OrderBookTrackerDataSource:
         return LbankAPIOrderBookDataSource(
-            trading_pairs=self._trading_pairs,
+            trading_pairs=self.trading_pairs,
             connector=self,
             api_factory=self._web_assistants_factory,
             domain=self._domain
@@ -115,7 +117,7 @@ class LbankExchange(ExchangePyBase):
             domain=self.domain,
             auth=self._auth)
 
-    def _format_trading_rules(self, exchange_info_dict: Dict[str, Any]) -> List[TradingRule]:
+    def _format_trading_rules(self, exchange_info_dict: Dict[str, Any]):
         raise NotImplementedError
 
     def _get_fee(self,
@@ -125,13 +127,13 @@ class LbankExchange(ExchangePyBase):
                  order_side: TradeType,
                  amount: Decimal,
                  price: Decimal = s_decimal_NaN,
-                 is_maker: Optional[bool] = None) -> TradeFeeBase:
+                 is_maker: Optional[bool] = None) -> AddedToCostTradeFee:
         raise NotImplementedError
 
     def _initialize_trading_pair_symbols_from_exchange_info(self, exchange_info: Dict[str, Any]):
         mapping = bidict()
         for symbol_data in filter(lbank_utils.is_exchange_information_valid, exchange_info["data"]):
-            mapping[symbol_data["symbol"]] = convert_from_exchange_trading_pair(symbol_data["symbol"])
+            mapping[symbol_data] = convert_from_exchange_trading_pair(symbol_data)
         self._set_trading_pair_symbol_map(mapping)
 
     def _is_order_not_found_during_cancelation_error(self, cancelation_exception: Exception) -> bool:
@@ -141,26 +143,42 @@ class LbankExchange(ExchangePyBase):
         raise NotImplementedError
 
     def _is_request_exception_related_to_time_synchronizer(self, request_exception: Exception) -> bool:
-        raise NotImplementedError
+        error_description = str(request_exception)
+        return CONSTANTS.RET_MSG_AUTH_TIMESTAMP_ERROR in error_description
 
     def _place_cancel(self, order_id: str, tracked_order: InFlightOrder):
         raise NotImplementedError
 
-    def _place_order(self,
-                     order_id: str,
-                     trading_pair: str,
-                     amount: Decimal,
-                     trade_type: TradeType,
-                     order_type: OrderType,
-                     price: Decimal,
-                     **kwargs) -> Tuple[str, float]:
+    async def _place_order(self,
+                           order_id: str,
+                           trading_pair: str,
+                           amount: Decimal,
+                           trade_type: TradeType,
+                           order_type: OrderType,
+                           price: Decimal,
+                           **kwargs) -> Tuple[str, float]:
         raise NotImplementedError
 
-    def _request_order_status(self, tracked_order: InFlightOrder) -> OrderUpdate:
+    async def _request_order_status(self, tracked_order: InFlightOrder) -> OrderUpdate:
         raise NotImplementedError
 
-    def _update_balances(self):
-        raise NotImplementedError
+    async def _update_balances(self):
+        response: Any
+        try:
+            response = await self._api_post(
+                path_url=CONSTANTS.ACCOUNTS_ENDPOINT,
+                is_auth_required=True)
+
+        except asyncio.CancelledError:
+            raise
+
+        except Exception as e:
+            error_description = str(e)
+            self.logger().exception(f"{error_description}")
+            raise
+
+        if response["result"] != "true":
+            self.logger().exception(f"{response}")
 
     def _update_trading_fees(self):
         """

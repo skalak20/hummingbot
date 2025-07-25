@@ -20,7 +20,8 @@ PUBLIC_API_VERSION = "v2"
 
 # Public API endpoints
 SERVER_TIME_ENDPOINT = "/timestamp.do"
-TRADING_PAIRS_ENDPOINT = "/accuracy.do"
+TRADING_PAIRS_ENDPOINT = "/currencyPairs.do"
+ACCOUNTS_ENDPOINT = "/supplement/user_info.do"
 
 # WSS endpoints
 WSS_URL = "wss://www.lbkex.net/ws/V2/"
@@ -39,4 +40,9 @@ RATE_LIMITS = [
     RateLimit(limit_id=OTHER_REQUESTS, limit=200, time_interval=TEN_SECONDS),
     RateLimit(limit_id=SERVER_TIME_ENDPOINT, limit=200, time_interval=TEN_SECONDS),
     RateLimit(limit_id=TRADING_PAIRS_ENDPOINT, limit=200, time_interval=TEN_SECONDS),
+    RateLimit(limit_id=ACCOUNTS_ENDPOINT, limit=200, time_interval=TEN_SECONDS),
 ]
+
+# Error codes
+RET_CODE_AUTH_TIMESTAMP_ERROR = "10600"
+RET_MSG_AUTH_TIMESTAMP_ERROR = "timestamp"

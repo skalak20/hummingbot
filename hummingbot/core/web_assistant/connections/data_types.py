@@ -120,8 +120,13 @@ class RESTResponse:
                 json_ = json.loads(decoded_string)
             else:
                 json_ = await self._aiohttp_response.json()
-        else:
+        elif self._aiohttp_response.content_type == "application/json":
             json_ = await self._aiohttp_response.json()
+        else:
+            byte_string = await self._aiohttp_response.read()
+            decoded_string = byte_string.decode('utf-8')
+            json_ = json.loads(decoded_string)
+
         return json_
 
     async def text(self) -> str:

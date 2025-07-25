@@ -19,5 +19,5 @@ class LbankAPIOrderBookDataSource(OrderBookTrackerDataSource):
         self._api_factory = api_factory
         self._domain = domain
 
-    def get_last_traded_prices(self, trading_pairs: List[str], domain: Optional[str] = None) -> Dict[str, float]:
+    async def get_last_traded_prices(self, trading_pairs: List[str], domain: Optional[str] = None) -> Dict[str, float]:
         raise NotImplementedError

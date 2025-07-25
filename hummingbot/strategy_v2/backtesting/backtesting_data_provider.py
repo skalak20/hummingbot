@@ -15,7 +15,7 @@ from hummingbot.data_feed.candles_feed.data_types import CandlesConfig, Historic
 from hummingbot.data_feed.market_data_provider import MarketDataProvider
 
 # Set up logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 

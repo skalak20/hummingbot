@@ -1,6 +1,7 @@
 from typing import Callable, Optional
 
 import hummingbot.connector.exchange.lbank.lbank_constants as CONSTANTS
+from hummingbot.connector.exchange.lbank.error import CommonError
 from hummingbot.connector.time_synchronizer import TimeSynchronizer
 from hummingbot.connector.utils import TimeSynchronizerRESTPreProcessor
 from hummingbot.core.api_throttler.async_throttler import AsyncThrottler
@@ -17,7 +18,23 @@ def public_rest_url(path_url: str, domain: str = CONSTANTS.DEF_DOMAIN) -> str:
     :param domain: the domain to connect to ("main" or "testnet"). The default value is "main"
     :return: the full URL to the endpoint
     """
-    return CONSTANTS.BASE_PATH_URL[domain] + CONSTANTS.PUBLIC_API_VERSION + path_url
+
+    url = CONSTANTS.BASE_PATH_URL[domain] + CONSTANTS.PUBLIC_API_VERSION + path_url
+    return url
+
+
+def private_rest_url(path_url: str, domain: str = CONSTANTS.DEF_DOMAIN) -> str:
+    """
+    Creates a full URL for provided private REST endpoint
+
+    :param path_url: a private REST endpoint
+    :param domain: the domain to connect to ("main" or "testnet"). The default value is "main"
+
+    :return: the full URL to the endpoint
+    """
+
+    url =  CONSTANTS.BASE_PATH_URL[domain] + CONSTANTS.PUBLIC_API_VERSION + path_url
+    return url
 
 
 def build_api_factory(
@@ -58,6 +75,11 @@ async def get_current_server_time(
     response = await rest_assistant.execute_request(
         url=public_rest_url(CONSTANTS.SERVER_TIME_ENDPOINT, domain),
         method=RESTMethod.GET,
-        throttler_limit_id=CONSTANTS.OTHER_REQUESTS)
-    server_time = response["data"]
-    return server_time
+        throttler_limit_id=CONSTANTS.SERVER_TIME_ENDPOINT)
+
+    if isinstance(response, dict) and response["result"] == "true":
+        server_time = response["data"]
+        return server_time
+
+    error_msg = str(response)
+    raise CommonError(f"Get Lbank server time error {error_msg}")
