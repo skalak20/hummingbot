@@ -16,6 +16,7 @@ from .start_command import StartCommand
 from .status_command import StatusCommand
 from .stop_command import StopCommand
 from .ticker_command import TickerCommand
+from .lbank_command import LbankCommand
 
 __all__ = [
     BalanceCommand,
@@ -36,4 +37,5 @@ __all__ = [
     StopCommand,
     TickerCommand,
     MQTTCommand,
+    LbankCommand,
 ]

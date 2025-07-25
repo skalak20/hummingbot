@@ -41,6 +41,10 @@ def load_parser(hummingbot: "HummingbotApplication", command_tabs) -> ThrowingAr
     parser = ThrowingArgumentParser(prog="", add_help=False)
     subparsers = parser.add_subparsers()
 
+    lbank_parser = subparsers.add_parser("lbank", help="LBank command exec")
+    lbank_parser.add_argument("command", nargs="?", help="Enter a command")
+    lbank_parser.set_defaults(func=hummingbot.lbank)
+
     connect_parser = subparsers.add_parser("connect", help="List available exchanges and add API keys to them")
     connect_parser.add_argument("option", nargs="?", choices=CONNECT_OPTIONS, help="Name of the exchange that you want to connect")
     connect_parser.set_defaults(func=hummingbot.connect)
