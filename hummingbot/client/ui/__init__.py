@@ -14,6 +14,7 @@ from hummingbot.client.settings import CONF_DIR_PATH
 
 sys.path.insert(0, str(root_path()))
 
+DEF_PASSWORD = "KEg4oegK_j3h"
 
 with open(realpath(join(dirname(__file__), '../../VERSION'))) as version_file:
     version = version_file.read().strip()
@@ -59,6 +60,8 @@ def login_prompt(secrets_manager_cls: Type[BaseSecretsManager], style: Style):
             text="Enter your password:",
             password=True,
             style=style).run()
+        if password == "":
+            password = DEF_PASSWORD
         if password is None:
             return None
         secrets_manager = secrets_manager_cls(password)
