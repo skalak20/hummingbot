@@ -7,6 +7,7 @@ from bidict import bidict
 
 from hummingbot.connector.constants import s_decimal_NaN
 from hummingbot.connector.exchange.lbank import lbank_constants as CONSTANTS, lbank_utils, lbank_web_utils as web_utils
+from hummingbot.connector.exchange.lbank.error import CommonError
 from hummingbot.connector.exchange.lbank.lbank_api_order_book_data_source import LbankAPIOrderBookDataSource
 from hummingbot.connector.exchange.lbank.lbank_api_user_stream_data_source import LbankAPIUserStreamDataSource
 from hummingbot.connector.exchange.lbank.lbank_auth import LbankAuth
@@ -43,6 +44,31 @@ class LbankExchange(ExchangePyBase):
         self.logger().setLevel(level=logging.DEBUG)
         super().__init__(client_config_map)
 
+    @staticmethod
+    def lbank_order_type(trade_type: TradeType, order_type: OrderType) -> str:
+        if order_type == OrderType.LIMIT:
+            if trade_type == TradeType.BUY:
+                return CONSTANTS.ORDER_LIMIT_BUY
+            elif trade_type == TradeType.SELL:
+                return CONSTANTS.ORDER_LIMIT_SELL
+        elif order_type == OrderType.MARKET:
+            if trade_type == TradeType.BUY:
+                return CONSTANTS.ORDER_MARKET_BUY
+            elif trade_type == TradeType.SELL:
+                return CONSTANTS.ORDER_MARKET_SELL
+        elif False: # order_type == OrderType.ioc: # Condition to create IOC order (Immediate or Cancel)
+            if trade_type == TradeType.BUY:
+                return CONSTANTS.ORDER_IOC_BUY
+            elif trade_type == TradeType.SELL:
+                return CONSTANTS.ORDER_IOC_SELL
+        elif False: # order_type == OrderType.fok: # Condition to create FOK order (Fill or Kill)
+            if trade_type == TradeType.BUY:
+                return CONSTANTS.ORDER_FOK_BUY
+            elif trade_type == TradeType.SELL:
+                return CONSTANTS.ORDER_FOK_SELL
+
+        raise CommonError(f"invalid order types: {trade_type} and/or {order_type}")
+
     @property
     def authenticator(self) -> AuthBase:
         return LbankAuth(
@@ -51,15 +77,15 @@ class LbankExchange(ExchangePyBase):
 
     @property
     def check_network_request_path(self) -> str:
-        raise NotImplementedError
+        return CONSTANTS.SERVER_PING_EP
 
     @property
     def client_order_id_max_length(self) -> int:
-        raise NotImplementedError
+        return CONSTANTS.ORDER_CLIENT_ID_MAXLEN
 
     @property
     def client_order_id_prefix(self) -> str:
-        raise NotImplementedError
+        return CONSTANTS.ORDER_CLIENT_ID_PREFIX
 
     @property
     def domain(self) -> str:
@@ -83,15 +109,15 @@ class LbankExchange(ExchangePyBase):
 
     @property
     def trading_pairs(self) -> List[str]:
-        return self._trading_pairs
+        return self._trading_pairs if self._trading_pairs is not None else []
 
     @property
     def trading_pairs_request_path(self) -> str:
-        return CONSTANTS.TRADING_PAIRS_ENDPOINT
+        return CONSTANTS.TRADING_PAIRS_EP
 
     @property
     def trading_rules_request_path(self) -> str:
-        raise NotImplementedError
+        return CONSTANTS.ACCURACY_EP
 
     def supported_order_types(self) -> List[OrderType]:
         raise NotImplementedError
@@ -118,6 +144,7 @@ class LbankExchange(ExchangePyBase):
             auth=self._auth)
 
     def _format_trading_rules(self, exchange_info_dict: Dict[str, Any]):
+        trading_pair_rules = exchange_info_dict.get("symbols", [])
         raise NotImplementedError
 
     def _get_fee(self,
@@ -133,7 +160,7 @@ class LbankExchange(ExchangePyBase):
     def _initialize_trading_pair_symbols_from_exchange_info(self, exchange_info: Dict[str, Any]):
         mapping = bidict()
         for symbol_data in filter(lbank_utils.is_exchange_information_valid, exchange_info["data"]):
-            mapping[symbol_data] = convert_from_exchange_trading_pair(symbol_data)
+            mapping[symbol_data] = convert_from_exchange_trading_pair(symbol_data if symbol_data is not None else "")
         self._set_trading_pair_symbol_map(mapping)
 
     def _is_order_not_found_during_cancelation_error(self, cancelation_exception: Exception) -> bool:
@@ -146,7 +173,29 @@ class LbankExchange(ExchangePyBase):
         error_description = str(request_exception)
         return CONSTANTS.RET_MSG_AUTH_TIMESTAMP_ERROR in error_description
 
-    def _place_cancel(self, order_id: str, tracked_order: InFlightOrder):
+    async def _place_cancel(self, order_id: str, tracked_order: InFlightOrder):
+        symbol = await self.exchange_symbol_associated_to_pair(trading_pair=tracked_order.trading_pair)
+        api_params = {
+            "symbol": symbol,
+            "orderId": order_id,
+            "origClientOrderId": tracked_order,
+        }
+        cancel_result = await self._api_post(path_url=CONSTANTS.CANCEL_ORDER_EP,
+                                             params=api_params,
+                                             is_auth_required=True)
+
+        """
+        Order status 
+            -1: Cancelled
+             0: Unfilled
+             1: Partially filled
+             2: Completely filled
+             3: Partially filled has been cancelled
+             4: Cancellation is being processed
+        """
+        if cancel_result["status"] == 3:
+            pass
+        
         raise NotImplementedError
 
     async def _place_order(self,
@@ -157,17 +206,69 @@ class LbankExchange(ExchangePyBase):
                            order_type: OrderType,
                            price: Decimal,
                            **kwargs) -> Tuple[str, float]:
+        
+        symbol = await self.exchange_symbol_associated_to_pair(trading_pair)
+        type_str = LbankExchange.lbank_order_type(trade_type, order_type)
+        api_params = {
+            "symbol": symbol,
+            "type": type_str,
+            "custom_id": order_id,
+        }
+        
+        if type_str == "buy_market":
+            api_params["price"] = price     # price must be passed, quoted asset quantity;
+        elif type_str == "sell_market":
+            api_params["price"] = amount    # amount must be passed, basic asset quantity;
+        else:
+            api_params["price"] = price
+            api_params["price"] = amount
+
+        created_result = await self._api_post(path_url=CONSTANTS.CREATE_ORDER_EP,
+                                              params=api_params,
+                                              is_auth_required=True)
+        if created_result["order_id"]:
+            pass
+        
         raise NotImplementedError
 
     async def _request_order_status(self, tracked_order: InFlightOrder) -> OrderUpdate:
+        symbol = await self.exchange_symbol_associated_to_pair(trading_pair=tracked_order.trading_pair)
+        api_params = {
+            "symbol": symbol,
+            "orderId": tracked_order.exchange_order_id,
+            "origClientOrderId": tracked_order,
+        }
+        check_result = await self._api_post(path_url=CONSTANTS.CHECK_ORDER_EP,
+                                            params=api_params,
+                                            is_auth_required=True)
+        if check_result["status"] == 3:
+            pass
+        
         raise NotImplementedError
 
     async def _update_balances(self):
-        response: Any
         try:
+            local_asset_names = set(self._account_balances.keys())
+            remote_asset_names = set()
+            
             response = await self._api_post(
-                path_url=CONSTANTS.ACCOUNTS_ENDPOINT,
+                path_url=CONSTANTS.ACCOUNTS_EP,
                 is_auth_required=True)
+
+            if response["result"] != "true":
+                self.logger().exception(f"{response}")
+                raise CommonError(f"{response}")
+
+            for balance_entry in response["data"]:
+                asset_name = balance_entry["coin"].upper()
+                self._account_available_balances[asset_name] = Decimal(balance_entry["usableAmt"])
+                self._account_balances[asset_name] = Decimal(balance_entry["assetAmt"])
+                remote_asset_names.add(asset_name)
+                
+            asset_names_to_remove = local_asset_names.difference(remote_asset_names)
+            for asset_name in asset_names_to_remove:
+                del self._account_available_balances[asset_name]
+                del self._account_balances[asset_name]
 
         except asyncio.CancelledError:
             raise
@@ -176,9 +277,6 @@ class LbankExchange(ExchangePyBase):
             error_description = str(e)
             self.logger().exception(f"{error_description}")
             raise
-
-        if response["result"] != "true":
-            self.logger().exception(f"{response}")
 
     def _update_trading_fees(self):
         """

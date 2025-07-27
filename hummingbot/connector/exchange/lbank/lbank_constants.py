@@ -1,5 +1,9 @@
 from hummingbot.core.api_throttler.data_types import LinkedLimitWeightPair, RateLimit
 
+# techically max length is not 100 because order with 200 symbols also created
+ORDER_CLIENT_ID_MAXLEN = 100
+ORDER_CLIENT_ID_PREFIX = ""
+
 DEF_DOMAIN = "main"
 
 RSA_STR = "RSA"
@@ -19,12 +23,36 @@ BASE_PATH_URL = {
 PUBLIC_API_VERSION = "v2"
 
 # Public API endpoints
-SERVER_TIME_ENDPOINT = "/timestamp.do"
-TRADING_PAIRS_ENDPOINT = "/currencyPairs.do"
-ACCOUNTS_ENDPOINT = "/supplement/user_info.do"
+SERVER_TIME_EP = "/timestamp.do"
+SERVER_PING_EP = "/supplement/system_ping.do"
+
+ACCURACY_EP = "/accuracy.do"
+TRADING_PAIRS_EP = "/currencyPairs.do"
+ACCOUNTS_EP = "/supplement/user_info.do"
+
+TEST_ORDER_EP ="/supplement/create_order_test.do"
+CREATE_ORDER_EP = "/supplement/create_order.do"
+BATCH_CREATE_ORDER_EP = "/batch_create_order.do"
+CANCEL_ORDER_EP = "/supplement/cancel_order.do"
+CANCEL_ORDERS_BY_SYMBOL_EP ="/supplement/cancel_order_by_symbol.do"
+CHECK_ORDER_EP = "/supplement/orders_info.do"
+OPEN_ORDERS_EP = "/supplement/orders_info_no_deal.do"
+ALL_ORDERS_EP = "/supplement/orders_info_history.do"
+ALL_TRADES_EP = "/supplement/transaction_history.do"
 
 # WSS endpoints
 WSS_URL = "wss://www.lbkex.net/ws/V2/"
+
+# LBank order params
+
+ORDER_LIMIT_BUY = "buy"
+ORDER_LIMIT_SELL = "sell"
+ORDER_MARKET_BUY = "buy_market"
+ORDER_MARKET_SELL = "sell_market"
+ORDER_IOC_BUY = "buy_ioc"
+ORDER_IOC_SELL = "sell_ioc"
+ORDER_FOK_BUY = "buy_fok"
+ORDER_FOK_SELL = "sell_fok"
 
 # Rate Limit Type
 CREATE_ORDER = "CREATE_ORDER"
@@ -38,9 +66,20 @@ RATE_LIMITS = [
     RateLimit(limit_id=CREATE_ORDER, limit=500, time_interval=TEN_SECONDS),
     RateLimit(limit_id=CANCEL_ORDER, limit=500, time_interval=TEN_SECONDS),
     RateLimit(limit_id=OTHER_REQUESTS, limit=200, time_interval=TEN_SECONDS),
-    RateLimit(limit_id=SERVER_TIME_ENDPOINT, limit=200, time_interval=TEN_SECONDS),
-    RateLimit(limit_id=TRADING_PAIRS_ENDPOINT, limit=200, time_interval=TEN_SECONDS),
-    RateLimit(limit_id=ACCOUNTS_ENDPOINT, limit=200, time_interval=TEN_SECONDS),
+    RateLimit(limit_id=SERVER_TIME_EP, limit=200, time_interval=TEN_SECONDS),
+    RateLimit(limit_id=SERVER_PING_EP, limit=200, time_interval=TEN_SECONDS),
+    RateLimit(limit_id=ACCURACY_EP, limit=200, time_interval=TEN_SECONDS),
+    RateLimit(limit_id=TRADING_PAIRS_EP, limit=200, time_interval=TEN_SECONDS),
+    RateLimit(limit_id=ACCOUNTS_EP, limit=200, time_interval=TEN_SECONDS),
+    RateLimit(limit_id=TEST_ORDER_EP, limit=200, time_interval=TEN_SECONDS),
+    RateLimit(limit_id=CREATE_ORDER_EP, limit=200, time_interval=TEN_SECONDS),
+    RateLimit(limit_id=BATCH_CREATE_ORDER_EP, limit=200, time_interval=TEN_SECONDS),
+    RateLimit(limit_id=CANCEL_ORDER_EP, limit=200, time_interval=TEN_SECONDS),
+    RateLimit(limit_id=CANCEL_ORDERS_BY_SYMBOL_EP, limit=200, time_interval=TEN_SECONDS),
+    RateLimit(limit_id=CHECK_ORDER_EP, limit=200, time_interval=TEN_SECONDS),
+    RateLimit(limit_id=OPEN_ORDERS_EP, limit=200, time_interval=TEN_SECONDS),
+    RateLimit(limit_id=ALL_ORDERS_EP, limit=200, time_interval=TEN_SECONDS),
+    RateLimit(limit_id=ALL_TRADES_EP, limit=200, time_interval=TEN_SECONDS),
 ]
 
 # Error codes

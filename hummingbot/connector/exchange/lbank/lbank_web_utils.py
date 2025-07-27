@@ -73,9 +73,9 @@ async def get_current_server_time(
     api_factory = build_api_factory_without_time_synchronizer_pre_processor(throttler)
     rest_assistant = await api_factory.get_rest_assistant()
     response = await rest_assistant.execute_request(
-        url=public_rest_url(CONSTANTS.SERVER_TIME_ENDPOINT, domain),
+        url=public_rest_url(CONSTANTS.SERVER_TIME_EP, domain),
         method=RESTMethod.GET,
-        throttler_limit_id=CONSTANTS.SERVER_TIME_ENDPOINT)
+        throttler_limit_id=CONSTANTS.SERVER_TIME_EP)
 
     if isinstance(response, dict) and response["result"] == "true":
         server_time = response["data"]
