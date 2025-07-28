@@ -30,11 +30,11 @@ ACCURACY_EP = "/accuracy.do"
 TRADING_PAIRS_EP = "/currencyPairs.do"
 ACCOUNTS_EP = "/supplement/user_info.do"
 
-ORDER_TEST_EP ="/supplement/create_order_test.do"
+ORDER_TEST_EP = "/supplement/create_order_test.do"
 ORDER_CREATE_EP = "/supplement/create_order.do"
 ORDER_CREATE_BATCH_EP = "/batch_create_order.do"
 ORDER_CANCEL_EP = "/supplement/cancel_order.do"
-ORDER_CANCEL_BY_SYMBOL_EP ="/supplement/cancel_order_by_symbol.do"
+ORDER_CANCEL_BY_SYMBOL_EP = "/supplement/cancel_order_by_symbol.do"
 ORDER_CHECK_EP = "/supplement/orders_info.do"
 ORDER_OPEN_EP = "/supplement/orders_info_no_deal.do"
 

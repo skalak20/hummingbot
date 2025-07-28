@@ -1,27 +1,27 @@
 import asyncio
 import json
 import threading
-
 from typing import TYPE_CHECKING, Optional
 from unittest.mock import MagicMock
+
 from typing_extensions import Awaitable
 
 from hummingbot.connector.exchange.lbank.lbank_auth import LbankAuth
-from hummingbot.core.web_assistant.connections.data_types import RESTMethod, RESTRequest
 from hummingbot.core.utils.async_utils import safe_ensure_future
+from hummingbot.core.web_assistant.connections.data_types import RESTMethod, RESTRequest
 
 if TYPE_CHECKING:
     from hummingbot.client.hummingbot_application import HummingbotApplication  # noqa: F401
 
 
 class LbankCommand:
-    def lbank(self, # type: HummingbotApplication
+    def lbank(self,  # type: HummingbotApplication
               command: Optional[str] = None):
-        
+
         if threading.current_thread() != threading.main_thread():
             self.ev_loop.call_soon_threadsafe(self.lbank, command)
             return
-        
+
         self.app.clear_input()
         self.notify(f"\nLbank command: {command}")
 
@@ -32,7 +32,7 @@ class LbankCommand:
         else:
             pass
 
-    async def call_user_info(self, # type: HummingbotApplication
+    async def call_user_info(self,  # type: HummingbotApplication
                              ):
 
         now = 1234567890.000
@@ -45,7 +45,7 @@ class LbankCommand:
         mock_time_provider.time.return_value = now
 
         market_connector = self.trading_core.markets["lbank"]
-            
+
         auth = LbankAuth(sign_method="HMACSHA256", api_key=api_key, api_secret=api_secret, time_provider=mock_time_provider)
         request = RESTRequest(method=RESTMethod.POST, url=test_url, data=json.dumps(params), is_auth_required=True)
         request = await auth.rest_authenticate(request)

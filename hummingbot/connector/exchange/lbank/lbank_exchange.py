@@ -56,12 +56,12 @@ class LbankExchange(ExchangePyBase):
                 return CONSTANTS.ORDER_MARKET_BUY
             elif trade_type == TradeType.SELL:
                 return CONSTANTS.ORDER_MARKET_SELL
-        elif False: # order_type == OrderType.ioc: # Condition to create IOC order (Immediate or Cancel)
+        elif False:  # order_type == OrderType.ioc: # Condition to create IOC order (Immediate or Cancel)
             if trade_type == TradeType.BUY:
                 return CONSTANTS.ORDER_IOC_BUY
             elif trade_type == TradeType.SELL:
                 return CONSTANTS.ORDER_IOC_SELL
-        elif False: # order_type == OrderType.fok: # Condition to create FOK order (Fill or Kill)
+        elif False:  # order_type == OrderType.fok: # Condition to create FOK order (Fill or Kill)
             if trade_type == TradeType.BUY:
                 return CONSTANTS.ORDER_FOK_BUY
             elif trade_type == TradeType.SELL:
@@ -185,7 +185,7 @@ class LbankExchange(ExchangePyBase):
                                              is_auth_required=True)
 
         """
-        Order status 
+        Order status
             -1: Cancelled
              0: Unfilled
              1: Partially filled
@@ -195,7 +195,7 @@ class LbankExchange(ExchangePyBase):
         """
         if cancel_result["status"] == 3:
             pass
-        
+
         raise NotImplementedError
 
     async def _place_order(self,
@@ -206,7 +206,7 @@ class LbankExchange(ExchangePyBase):
                            order_type: OrderType,
                            price: Decimal,
                            **kwargs) -> Tuple[str, float]:
-        
+
         symbol = await self.exchange_symbol_associated_to_pair(trading_pair)
         type_str = LbankExchange.lbank_order_type(trade_type, order_type)
         api_params = {
@@ -214,7 +214,7 @@ class LbankExchange(ExchangePyBase):
             "type": type_str,
             "custom_id": order_id,
         }
-        
+
         if type_str == "buy_market":
             api_params["price"] = price     # price must be passed, quoted asset quantity;
         elif type_str == "sell_market":
@@ -228,7 +228,7 @@ class LbankExchange(ExchangePyBase):
                                               is_auth_required=True)
         if created_result["order_id"]:
             pass
-        
+
         raise NotImplementedError
 
     async def _request_order_status(self, tracked_order: InFlightOrder) -> OrderUpdate:
@@ -243,14 +243,14 @@ class LbankExchange(ExchangePyBase):
                                             is_auth_required=True)
         if check_result["status"] == 3:
             pass
-        
+
         raise NotImplementedError
 
     async def _update_balances(self):
         try:
             local_asset_names = set(self._account_balances.keys())
             remote_asset_names = set()
-            
+
             response = await self._api_post(
                 path_url=CONSTANTS.ACCOUNTS_EP,
                 is_auth_required=True)
@@ -264,7 +264,7 @@ class LbankExchange(ExchangePyBase):
                 self._account_available_balances[asset_name] = Decimal(balance_entry["usableAmt"])
                 self._account_balances[asset_name] = Decimal(balance_entry["assetAmt"])
                 remote_asset_names.add(asset_name)
-                
+
             asset_names_to_remove = local_asset_names.difference(remote_asset_names)
             for asset_name in asset_names_to_remove:
                 del self._account_available_balances[asset_name]
