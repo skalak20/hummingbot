@@ -180,7 +180,7 @@ class LbankExchange(ExchangePyBase):
             "orderId": order_id,
             "origClientOrderId": tracked_order,
         }
-        cancel_result = await self._api_post(path_url=CONSTANTS.CANCEL_ORDER_EP,
+        cancel_result = await self._api_post(path_url=CONSTANTS.ORDER_CANCEL_EP,
                                              params=api_params,
                                              is_auth_required=True)
 
@@ -223,7 +223,7 @@ class LbankExchange(ExchangePyBase):
             api_params["price"] = price
             api_params["price"] = amount
 
-        created_result = await self._api_post(path_url=CONSTANTS.CREATE_ORDER_EP,
+        created_result = await self._api_post(path_url=CONSTANTS.ORDER_CREATE_EP,
                                               params=api_params,
                                               is_auth_required=True)
         if created_result["order_id"]:
@@ -238,7 +238,7 @@ class LbankExchange(ExchangePyBase):
             "orderId": tracked_order.exchange_order_id,
             "origClientOrderId": tracked_order,
         }
-        check_result = await self._api_post(path_url=CONSTANTS.CHECK_ORDER_EP,
+        check_result = await self._api_post(path_url=CONSTANTS.ORDER_CHECK_EP,
                                             params=api_params,
                                             is_auth_required=True)
         if check_result["status"] == 3:

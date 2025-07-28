@@ -2,7 +2,7 @@ import asyncio
 import json
 import threading
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 from unittest.mock import MagicMock
 from typing_extensions import Awaitable
 
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 class LbankCommand:
     def lbank(self, # type: HummingbotApplication
-              command: str = None):
+              command: Optional[str] = None):
         
         if threading.current_thread() != threading.main_thread():
             self.ev_loop.call_soon_threadsafe(self.lbank, command)
@@ -32,7 +32,8 @@ class LbankCommand:
         else:
             pass
 
-    async def call_user_info(self):
+    async def call_user_info(self, # type: HummingbotApplication
+                             ):
 
         now = 1234567890.000
         api_key = "44afd74f-6fc0-443e-be72-18b2374086ad"
@@ -43,13 +44,15 @@ class LbankCommand:
         mock_time_provider = MagicMock()
         mock_time_provider.time.return_value = now
 
+        market_connector = self.trading_core.markets["lbank"]
+            
         auth = LbankAuth(sign_method="HMACSHA256", api_key=api_key, api_secret=api_secret, time_provider=mock_time_provider)
         request = RESTRequest(method=RESTMethod.POST, url=test_url, data=json.dumps(params), is_auth_required=True)
         request = await auth.rest_authenticate(request)
 
-        throttler = throttler or create_throttler()
-        api_factory = build_api_factory_without_time_synchronizer_pre_processor(throttler=throttler)
-        rest_assistant = await api_factory.get_rest_assistant()
+        # throttler = create_throttler()
+        # api_factory = build_api_factory_without_time_synchronizer_pre_processor(throttler=throttler)
+        # rest_assistant = await api_factory.get_rest_assistant()
         rest_assistant = await self._web_assistants_factory.get_rest_assistant()
         result = await rest_assistant.execute_request()
 
