@@ -33,6 +33,8 @@ class MexcUserStreamDataSourceUnitTests(IsolatedAsyncioWrapperTestCase):
         cls.domain = "com"
 
         cls.listen_key = "TEST_LISTEN_KEY"
+        cls._api_key = "mx0vglIpTxQq4SYuo5"
+        cls._api_secret = "ceb00f95211f438594c1f2ea990c0695"
 
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
@@ -43,7 +45,7 @@ class MexcUserStreamDataSourceUnitTests(IsolatedAsyncioWrapperTestCase):
         self.throttler = AsyncThrottler(rate_limits=CONSTANTS.RATE_LIMITS)
         self.mock_time_provider = MagicMock()
         self.mock_time_provider.time.return_value = 1000
-        self.auth = MexcAuth(api_key="TEST_API_KEY", secret_key="TEST_SECRET", time_provider=self.mock_time_provider)
+        self.auth = MexcAuth(api_key=self._api_key, secret_key=self._api_secret, time_provider=self.mock_time_provider)
         self.time_synchronizer = TimeSynchronizer()
         self.time_synchronizer.add_time_offset_ms_sample(0)
 
