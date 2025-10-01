@@ -47,7 +47,7 @@ class KucoinExchangeTests(unittest.TestCase):
         cls.exchange_trading_pair = cls.trading_pair
         cls.api_key = "68bfcba2df90c30001d13469"
         cls.api_passphrase = "Gab8GIrMwRcDhixREtdk"
-        cls.api_secret_key = "someSecretKey"
+        cls.api_secret_key = "007d6316-cf41-4db8-948d-bccfc145b9d7"
 
     def setUp(self) -> None:
         super().setUp()
