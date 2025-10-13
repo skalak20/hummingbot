@@ -1,8 +1,8 @@
 import asyncio
 import unittest
-
+from test.mock_logs.model.mock_record import MockRecord
 from unittest import IsolatedAsyncioTestCase
-from test.mock_logs.mock_record import MockRecord
+
 
 class TestLogParsing(IsolatedAsyncioTestCase):
     MOCK_LOG_PATH = "test/mock_logs/logs_conf_v2_with_controllers_tst2.log"
@@ -33,7 +33,7 @@ class TestLogParsing(IsolatedAsyncioTestCase):
         self.assertIsNotNone(self._records)
         self.assertEqual(self.MOCK_LOG_LEN, len(self._records))
 
-    async def test_events(self):
+    async def test_events_async(self):
         result: bool = False
         duration = 0
         curr_date = None
@@ -53,6 +53,7 @@ class TestLogParsing(IsolatedAsyncioTestCase):
 
         result = True
         self.assertTrue(result)
+
 
 if __name__ == '__main__':
     unittest.main()

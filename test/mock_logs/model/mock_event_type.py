@@ -3,6 +3,7 @@ from enum import Enum
 
 PATTERNS = {}
 
+
 class MOCK_EVENT_TYPE(Enum):
     UNKNOWN = 0,
     START_BEG = 10
@@ -26,7 +27,7 @@ class MOCK_EVENT_TYPE(Enum):
                 type = MOCK_EVENT_TYPE.START_BEG
             case str() if m := re.fullmatch(PATTERNS[MOCK_EVENT_TYPE.START_END], msg):
                 type = MOCK_EVENT_TYPE.START_END
-                
+
             case str() if m := re.fullmatch(PATTERNS[MOCK_EVENT_TYPE.ORDR_NEW_ASK], msg):
                 type = MOCK_EVENT_TYPE.ORDR_NEW_ASK
             case str() if m := re.fullmatch(PATTERNS[MOCK_EVENT_TYPE.ORDR_NEW_RSP], msg):
@@ -35,13 +36,14 @@ class MOCK_EVENT_TYPE(Enum):
                 type = MOCK_EVENT_TYPE.ORDR_CNL_ASK
             case str() if m := re.fullmatch(PATTERNS[MOCK_EVENT_TYPE.ORDR_CNL_RSP], msg):
                 type = MOCK_EVENT_TYPE.ORDR_CNL_RSP
-                
+
             case str() if m := re.fullmatch(PATTERNS[MOCK_EVENT_TYPE.STOP_BEG], msg):
                 type = MOCK_EVENT_TYPE.STOP_BEG
             case str() if m := re.fullmatch(PATTERNS[MOCK_EVENT_TYPE.STOP_END], msg):
                 type = MOCK_EVENT_TYPE.STOP_END
 
         return type, m
+
 
 PATTERNS = {
     MOCK_EVENT_TYPE.START_BEG:      r"Clock started successfully\n",

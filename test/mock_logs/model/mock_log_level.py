@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class MOCK_LOG_LEVEL(Enum):
     DEBUG = 10
     INFO = 20

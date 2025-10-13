@@ -1,10 +1,10 @@
 import re
-
 from datetime import datetime
-from test.mock_logs.mock_event_type import MOCK_EVENT_TYPE
-from test.mock_logs.mock_log_level import MOCK_LOG_LEVEL
-from test.mock_logs.mock_order_side import MOCK_ORDER_SIDE
-from test.mock_logs.mock_order_type import MOCK_ORDER_TYPE
+from test.mock_logs.model.mock_event_type import MOCK_EVENT_TYPE
+from test.mock_logs.model.mock_log_level import MOCK_LOG_LEVEL
+from test.mock_logs.model.mock_order_side import MOCK_ORDER_SIDE
+from test.mock_logs.model.mock_order_type import MOCK_ORDER_TYPE
+
 
 class MockRecord:
     def __init__(self, gluphs):
