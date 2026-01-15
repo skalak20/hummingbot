@@ -1,3 +1,4 @@
+from .backtest_command import BacktestCommand
 from .balance_command import BalanceCommand
 from .config_command import ConfigCommand
 from .connect_command import ConnectCommand
@@ -23,6 +24,7 @@ from .stop_command import StopCommand
 from .ticker_command import TickerCommand
 
 __all__ = [
+    BacktestCommand,
     BalanceCommand,
     ConfigCommand,
     ConnectCommand,
