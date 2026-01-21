@@ -1,12 +1,13 @@
 import hashlib
 import hmac
 from typing import Any, Dict
-from urllib.parse import urlparse, urlencode
+from urllib.parse import urlencode, urlparse
 
-from hummingbot.core.web_assistant.auth import AuthBase
-from hummingbot.connector.time_synchronizer import TimeSynchronizer
-from hummingbot.core.web_assistant.connections.data_types import RESTMethod, RESTRequest, WSRequest
 from hummingbot.connector.exchange.coinex.coinex_utils import get_timestamp
+from hummingbot.connector.time_synchronizer import TimeSynchronizer
+from hummingbot.core.web_assistant.auth import AuthBase
+from hummingbot.core.web_assistant.connections.data_types import RESTMethod, RESTRequest, WSRequest
+
 
 class CoinexAuth(AuthBase):
 
@@ -32,7 +33,7 @@ class CoinexAuth(AuthBase):
         :param request: the request to be configured for authenticated interaction
         """
 
-        timestamp = str(int(self.time_provider.time() * 1e3) if self.time_provider else get_timestamp())        
+        timestamp = str(int(self.time_provider.time() * 1e3) if self.time_provider else get_timestamp())
         signed_str = self.gen_sign("GET", "", "", timestamp)
         headers = self.get_common_headers(signed_str, timestamp)
         request.headers = headers
@@ -82,8 +83,8 @@ class CoinexAuth(AuthBase):
         prepared_str = f"{method}{request_path}{body}{timestamp}"
 
         signature = hmac.new(
-            bytes(self.secret_key, 'latin-1'), 
-            msg=bytes(prepared_str, 'latin-1'), 
+            bytes(self.secret_key, 'latin-1'),
+            msg=bytes(prepared_str, 'latin-1'),
             digestmod=hashlib.sha256
         ).hexdigest().lower()
 

@@ -1,16 +1,20 @@
 import time
+
 from pydantic import ConfigDict, Field, SecretStr
 
 from hummingbot.client.config.config_data_types import BaseConnectorConfigMap
 
+
 def get_timestamp() -> str:
     return str(int(time.time() * 1000)).split(".", maxsplit=1)[0]
+
 
 def convert_from_exchange_trading_pair(exchange_trading_pair: str):
     if "_" not in exchange_trading_pair:
         return None
     base, quote = exchange_trading_pair.split("_")
     return f"{base}-{quote}"
+
 
 class CoinexConfigMap(BaseConnectorConfigMap):
     connector: str = "coinex"
@@ -33,5 +37,6 @@ class CoinexConfigMap(BaseConnectorConfigMap):
         }
     )
     model_config = ConfigDict(title="coinex")
-    
+
+
 KEYS = CoinexConfigMap.model_construct()

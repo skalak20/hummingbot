@@ -9,6 +9,7 @@ from hummingbot.core.web_assistant.auth import AuthBase
 from hummingbot.core.web_assistant.connections.data_types import RESTMethod
 from hummingbot.core.web_assistant.web_assistants_factory import WebAssistantsFactory
 
+
 def public_rest_url(path_url: str, domain: str = CONSTANTS.DEF_DOMAIN) -> str:
     """
     Creates a full URL for provided public REST endpoint
@@ -20,6 +21,7 @@ def public_rest_url(path_url: str, domain: str = CONSTANTS.DEF_DOMAIN) -> str:
 
     url = CONSTANTS.BASE_PATH_URL[domain] + CONSTANTS.PUBLIC_API_VERSION + path_url
     return url
+
 
 def build_api_factory(
         throttler: Optional[AsyncThrottler] = None,
@@ -40,11 +42,14 @@ def build_api_factory(
         ])
     return api_factory
 
+
 def create_throttler() -> AsyncThrottler:
     return AsyncThrottler(CONSTANTS.RATE_LIMITS)
 
+
 def build_api_factory_without_time_synchronizer_pre_processor(throttler: AsyncThrottler) -> WebAssistantsFactory:
     return WebAssistantsFactory(throttler)
+
 
 async def get_current_server_time(
         throttler: Optional[AsyncThrottler] = None,

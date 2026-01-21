@@ -8,6 +8,7 @@ from hummingbot.core.web_assistant.web_assistants_factory import WebAssistantsFa
 if TYPE_CHECKING:
     from hummingbot.connector.exchange.coinex.coinex_exchange import CoinexExchange
 
+
 class CoinexAPIUserStreamDataSource(UserStreamTrackerDataSource):
 
     def __init__(self,
@@ -21,4 +22,3 @@ class CoinexAPIUserStreamDataSource(UserStreamTrackerDataSource):
         self._api_factory = api_factory
         self._last_ws_message_sent_timestamp = 0
         self._ping_interval = 0
-
