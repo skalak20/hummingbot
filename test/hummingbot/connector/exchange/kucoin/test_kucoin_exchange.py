@@ -45,9 +45,10 @@ class KucoinExchangeTests(unittest.TestCase):
         cls.quote_asset = "HBOT"
         cls.trading_pair = f"{cls.base_asset}-{cls.quote_asset}"
         cls.exchange_trading_pair = cls.trading_pair
-        cls.api_key = "someKey"
-        cls.api_passphrase = "somePassPhrase"
-        cls.api_secret_key = "someSecretKey"
+        # ag_api_5
+        cls.api_key = "6970ee7922ca320001d2da9e"
+        cls.api_passphrase = "Gab8GIrMwRcDhixREtdk"
+        cls.api_secret_key = "f1a258ae-11dc-4d9c-aec7-9e44e7226e1c"
 
     def setUp(self) -> None:
         super().setUp()

@@ -14,11 +14,11 @@ from hummingbot.core.web_assistant.connections.data_types import RESTMethod, RES
 class MexcAuthTests(TestCase):
 
     def setUp(self) -> None:
-        self._api_key = "testApiKey"
-        self._secret = "testSecret"
+        self._api_key = "mx0vglIpTxQq4SYuo5"
+        self._secret = "ceb00f95211f438594c1f2ea990c0695"
 
     def async_run_with_timeout(self, coroutine: Awaitable, timeout: float = 1):
-        ret = asyncio.get_event_loop().run_until_complete(asyncio.wait_for(coroutine, timeout))
+        ret = asyncio.new_event_loop().run_until_complete(asyncio.wait_for(coroutine, timeout))
         return ret
 
     def test_rest_authenticate(self):
