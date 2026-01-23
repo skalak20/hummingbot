@@ -3,8 +3,9 @@ from decimal import Decimal
 
 from aioresponses import aioresponses
 
-from hummingbot.connector.trading_rule import TradingRule
 from hummingbot.connector.exchange.coinex.coinex_exchange import CoinexExchange
+from hummingbot.connector.trading_rule import TradingRule
+
 
 class CoinexExchangeTests(unittest.TestCase):
 

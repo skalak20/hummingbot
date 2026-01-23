@@ -2,11 +2,11 @@ import asyncio
 import base64
 import hashlib
 import hmac
-
 from typing import Awaitable
-from aioresponses import aioresponses
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
+
+from aioresponses import aioresponses
 
 from hummingbot.connector.exchange.coinex.coinex_auth import CoinexAuth
 from hummingbot.core.web_assistant.connections.data_types import RESTMethod, RESTRequest
@@ -14,6 +14,7 @@ from hummingbot.core.web_assistant.connections.data_types import RESTMethod, RES
 TEST_TS = 1700490703.564
 TEST_KEY = "560CE33AA5E845929981B163ABD2B25F"
 TEST_SECRET = "CB83A671B4F31671138589A7C8805D0C79FEEA9B298A14C7"
+
 
 class CoinexAuthTests(TestCase):
 
@@ -44,8 +45,8 @@ class CoinexAuthTests(TestCase):
             "market_type": "SPOT",
             "side": "buy",
             "type": "limit",
-            "amount":"10000",
-            "price": "1",   
+            "amount": "10000",
+            "price": "1",
             "client_id": "order1",
             "is_hide": True,
         }
