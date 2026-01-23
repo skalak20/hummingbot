@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import time
 from typing import Any, Dict
 from urllib.parse import urlencode, urlparse
 
@@ -34,18 +35,26 @@ class CoinexAuth(AuthBase):
         """
 
         timestamp = str(int(self.time_provider.time() * 1e3) if self.time_provider else get_timestamp())
-        signed_str = self.gen_sign("GET", "", "", timestamp)
+        return self.add_auth_headers(method=request.method, request=request)
+        signed_str = self.gen_sign("GET", "", "", timestamp=timestamp)
         headers = self.get_common_headers(signed_str, timestamp)
         request.headers = headers
 
         return request
+
+    async def ws_authenticate(self, request: WSRequest) -> WSRequest:
+        """
+        This method is intended to configure a websocket request to be authenticated. Mexc does not use this
+        functionality
+        """
+        return request  # pass-through
 
     def request(self, method, url, params={}, data=""):
         req = urlparse(url)
 
         timestamp = str(int(self.time_provider.time() * 1e3))
 
-        signed_str = self.gen_sign(method, req.path, params, data, timestamp)
+        signed_str = self.gen_sign(method, req.path, params, data, timestamp=timestamp)
 
         if method.upper() == "GET":
             response = requests.get(

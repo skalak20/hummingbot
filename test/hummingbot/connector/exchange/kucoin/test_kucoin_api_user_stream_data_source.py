@@ -45,9 +45,9 @@ class TestKucoinAPIUserStreamDataSource(IsolatedAsyncioWrapperTestCase):
             time_provider=self.mock_time_provider)
 
         self.connector = KucoinExchange(
-            kucoin_api_key="",
-            kucoin_passphrase="",
-            kucoin_secret_key="",
+            kucoin_api_key="6970ee7922ca320001d2da9e",
+            kucoin_passphrase="Gab8GIrMwRcDhixREtdk",
+            kucoin_secret_key="f1a258ae-11dc-4d9c-aec7-9e44e7226e1c",
             trading_pairs=[],
             trading_required=False)
 
