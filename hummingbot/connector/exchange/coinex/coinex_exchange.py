@@ -6,12 +6,16 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 from bidict import bidict
 
 from hummingbot.connector.constants import s_decimal_NaN
+from hummingbot.connector.exchange.coinex import (
+    coinex_constants as CONSTANTS,
+    coinex_utils,
+    coinex_web_utils as web_utils,
+)
 from hummingbot.connector.exchange.coinex.coinex_api_order_book_data_source import CoinexAPIOrderBookDataSource
 from hummingbot.connector.exchange.coinex.coinex_api_user_stream_data_source import CoinexAPIUserStreamDataSource
 from hummingbot.connector.exchange.coinex.coinex_auth import CoinexAuth
-from hummingbot.connector.exchange_py_base import ExchangePyBase
 from hummingbot.connector.exchange.coinex.coinex_utils import convert_from_exchange_trading_pair
-from hummingbot.connector.exchange.coinex import coinex_constants as CONSTANTS, coinex_utils, coinex_web_utils as web_utils
+from hummingbot.connector.exchange_py_base import ExchangePyBase
 from hummingbot.core.api_throttler.data_types import RateLimit
 from hummingbot.core.data_type.common import OrderType, TradeType
 from hummingbot.core.data_type.in_flight_order import InFlightOrder, OrderUpdate, TradeUpdate
@@ -20,6 +24,7 @@ from hummingbot.core.data_type.trade_fee import AddedToCostTradeFee
 from hummingbot.core.data_type.user_stream_tracker_data_source import UserStreamTrackerDataSource
 from hummingbot.core.web_assistant.auth import AuthBase
 from hummingbot.core.web_assistant.web_assistants_factory import WebAssistantsFactory
+
 
 class CoinexExchange(ExchangePyBase):
 

@@ -5,16 +5,17 @@ from unittest.mock import MagicMock
 
 from hummingbot.connector.exchange.coinex.coinex_auth import CoinexAuth
 
+
 class CoinexAuthTests(TestCase):
 
     def setUp(self) -> None:
         super().setUp()
         self.api_key = "560CE33AA5E845929981B163ABD2B25F"
         self.secret_key = "CB83A671B4F31671138589A7C8805D0C79FEEA9B298A14C7"
-        
+
         self.mock_time_provider = MagicMock()
         self.mock_time_provider.time.return_value = 1000
-        
+
         self.auth = CoinexAuth(
             api_key=self.api_key,
             secret_key=self.secret_key,
@@ -30,7 +31,7 @@ class CoinexAuthTests(TestCase):
         mock_time_provider = MagicMock()
         mock_time_provider.time.return_value = now
         test_url = "/test"
-        
+
         auth = MexcAuth(api_key=self._api_key, secret_key=self._secret, time_provider=mock_time_provider)
         request = RESTRequest(method=RESTMethod.GET, params=params, is_auth_required=True)
         configured_request = self.async_run_with_timeout(auth.rest_authenticate(request))
