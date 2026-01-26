@@ -16,9 +16,10 @@ class KucoinAuthTests(TestCase):
 
     def setUp(self) -> None:
         super().setUp()
-        self.api_key = "testApiKey"
-        self.passphrase = "testPassphrase"
-        self.secret_key = "testSecretKey"
+        # ag_api_5
+        self.api_key = "6970ee7922ca320001d2da9e"
+        self.passphrase = "Gab8GIrMwRcDhixREtdk"
+        self.secret_key = "f1a258ae-11dc-4d9c-aec7-9e44e7226e1c"
 
         self.mock_time_provider = MagicMock()
         self.mock_time_provider.time.return_value = 1000

@@ -909,6 +909,8 @@ class ExchangePyBase(ExchangeBase, ABC):
 
         for _ in range(2):
             try:
+                self.logger().debug(f"> {url}")
+
                 request_result = await rest_assistant.execute_request(
                     url=url,
                     params=params,
@@ -920,6 +922,7 @@ class ExchangePyBase(ExchangeBase, ABC):
                     headers=headers,
                 )
 
+                self.logger().debug(f"< {url} result:\r{request_result}")
                 return request_result
             except IOError as request_exception:
                 last_exception = request_exception
