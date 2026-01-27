@@ -25,16 +25,17 @@ from hummingbot.core.data_type.user_stream_tracker_data_source import UserStream
 from hummingbot.core.web_assistant.auth import AuthBase
 from hummingbot.core.web_assistant.web_assistants_factory import WebAssistantsFactory
 
+if TYPE_CHECKING:
+    from hummingbot.client.config.config_helpers import ClientConfigAdapter
 
 class CoinexExchange(ExchangePyBase):
 
     web_utils = web_utils
 
     def __init__(self,
+                 client_config_map: "ClientConfigAdapter",
                  coinex_api_key: str,
                  coinex_api_secret: str,
-                 balance_asset_limit: Optional[Dict[str, Dict[str, Decimal]]] = None,
-                 rate_limits_share_pct: Decimal = Decimal("100"),
                  trading_pairs: Optional[List[str]] = None,
                  trading_required: bool = True,
                  domain: str = CONSTANTS.DEF_DOMAIN):
@@ -44,7 +45,7 @@ class CoinexExchange(ExchangePyBase):
         self._trading_pairs = trading_pairs
         self._trading_required = trading_required
         self.logger().setLevel(level=logging.DEBUG)
-        super().__init__(balance_asset_limit, rate_limits_share_pct)
+        super().__init__(client_config_map)
 
     @staticmethod
     def lbank_order_type(trade_type: TradeType, order_type: OrderType) -> str:
@@ -58,7 +59,8 @@ class CoinexExchange(ExchangePyBase):
     def authenticator(self) -> AuthBase:
         return CoinexAuth(
             api_key=self._api_key,
-            api_secret=self._secret_key)
+            api_secret=self._secret_key,
+            time_provider=self._time_synchronizer)
 
     @property
     def check_network_request_path(self) -> str:
@@ -112,7 +114,13 @@ class CoinexExchange(ExchangePyBase):
         )
 
     def _create_user_stream_data_source(self) -> UserStreamTrackerDataSource:
-        return CoinexAPIUserStreamDataSource()
+        return CoinexAPIUserStreamDataSource(
+            auth=self._auth,
+            trading_pairs=self._trading_pairs,
+            connector=self,
+            api_factory=self._web_assistants_factory,
+            domain=self.domain,            
+        )
 
     def _create_web_assistants_factory(self) -> WebAssistantsFactory:
         return web_utils.build_api_factory(

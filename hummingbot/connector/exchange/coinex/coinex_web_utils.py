@@ -63,9 +63,9 @@ async def get_current_server_time(
         method=RESTMethod.GET,
         throttler_limit_id=CONSTANTS.SERVER_TIME_EP)
 
-    if isinstance(response, dict) and response["result"] == "true":
-        server_time = response["data"]
+    if isinstance(response, dict) and response["code"] == 0:
+        server_time = response["data"]["timestamp"]
         return server_time
 
-    error_msg = str(response)
-    raise CommonError(f"Get Lbank server time error {error_msg}")
+    error_msg = str(response['message'])
+    raise CommonError(f"Get Coinex server time error: {error_msg}")
