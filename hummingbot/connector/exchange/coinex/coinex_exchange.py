@@ -28,6 +28,7 @@ from hummingbot.core.web_assistant.web_assistants_factory import WebAssistantsFa
 if TYPE_CHECKING:
     from hummingbot.client.config.config_helpers import ClientConfigAdapter
 
+
 class CoinexExchange(ExchangePyBase):
 
     web_utils = web_utils
@@ -119,7 +120,7 @@ class CoinexExchange(ExchangePyBase):
             trading_pairs=self._trading_pairs,
             connector=self,
             api_factory=self._web_assistants_factory,
-            domain=self.domain,            
+            domain=self.domain,
         )
 
     def _create_web_assistants_factory(self) -> WebAssistantsFactory:

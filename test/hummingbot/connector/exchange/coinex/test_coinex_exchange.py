@@ -11,18 +11,16 @@ from bidict import bidict
 
 from hummingbot.client.config.client_config_map import ClientConfigMap
 from hummingbot.client.config.config_helpers import ClientConfigAdapter
-from hummingbot.connector.exchange.coinex import (
-    coinex_constants as CONSTANTS,
-    coinex_web_utils as web_utils,
-)
-from hummingbot.connector.trading_rule import TradingRule
+from hummingbot.connector.exchange.coinex import coinex_constants as CONSTANTS, coinex_web_utils as web_utils
 from hummingbot.connector.exchange.coinex.coinex_exchange import CoinexExchange
+from hummingbot.connector.trading_rule import TradingRule
 from hummingbot.core.event.event_logger import EventLogger
 from hummingbot.core.event.events import MarketEvent
 
 TEST_TS_SEC = 1640000003
 TEST_KEY = "560CE33AA5E845929981B163ABD2B25F"
 TEST_SECRET = "CB83A671B4F31671138589A7C8805D0C79FEEA9B298A14C7"
+
 
 class CoinexExchangeTests(unittest.TestCase):
     # the level is required to receive logs from the data source logger
@@ -41,17 +39,17 @@ class CoinexExchangeTests(unittest.TestCase):
 
     def setUp(self) -> None:
         super().setUp()
-        
+
         self.log_records = []
         self.client_config_map = ClientConfigAdapter(ClientConfigMap())
-        
+
         self.exchange = CoinexExchange(
             client_config_map=self.client_config_map,
             coinex_api_key=self.api_key,
             coinex_api_secret=self.api_secret_key,
             trading_pairs=[self.trading_pair]
         )
-        
+
         self.exchange.logger().setLevel(1)
         self.exchange.logger().addHandler(self)
         self.exchange._time_synchronizer.add_time_offset_ms_sample(0)
@@ -110,7 +108,7 @@ class CoinexExchangeTests(unittest.TestCase):
         url = web_utils.public_rest_url(CONSTANTS.SERVER_TIME_EP)
         regex_url = re.compile(f"^{url}".replace(".", r"\.").replace("?", r"\?"))
 
-        response = { "code": -1, "message": "error" }
+        response = {"code": -1, "message": "error"}
 
         mock_api.get(regex_url, body=json.dumps(response))
 
@@ -128,7 +126,7 @@ class CoinexExchangeTests(unittest.TestCase):
         url = web_utils.public_rest_url(CONSTANTS.SERVER_TIME_EP)
         regex_url = re.compile(f"^{url}".replace(".", r"\.").replace("?", r"\?"))
 
-        response = { "code": 0, "message": "OK", "data": {"timestamp": TEST_TS_SEC * 1e3} }
+        response = {"code": 0, "message": "OK", "data": {"timestamp": TEST_TS_SEC * 1e3}}
 
         mock_api.get(regex_url,
                      body=json.dumps(response),
