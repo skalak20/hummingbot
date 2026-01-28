@@ -33,13 +33,11 @@ class CoinexAuth(AuthBase):
 
         :param request: the request to be configured for authenticated interaction
         """
-
-        timestamp = str(int(self.time_provider.time() * 1e3) if self.time_provider else get_timestamp())
-        return self.add_auth_headers(method=request.method, request=request)
-        signed_str = self.gen_sign("GET", "", "", timestamp=timestamp)
-        headers = self.get_common_headers(signed_str, timestamp)
+        headers = {}
+        if request.headers is not None:
+            headers.update(request.headers)
+        headers.update(self.authentication_headers(request=request))
         request.headers = headers
-
         return request
 
     async def ws_authenticate(self, request: WSRequest) -> WSRequest:
@@ -49,52 +47,42 @@ class CoinexAuth(AuthBase):
         """
         return request  # pass-through
 
-    def request(self, method, url, params={}, data=""):
-        req = urlparse(url)
+    def authentication_headers(self, request: RESTRequest) -> Dict[str, Any]:
+        timestamp = str(int(self.time_provider.time() * 1e3) if self.time_provider else get_timestamp())
+        request_path = request.throttler_limit_id
 
-        timestamp = str(int(self.time_provider.time() * 1e3))
+        method = str(request.method).upper()
+        if method == "GET":
+            params = request.params
+            # If params exist, query string needs to be added to the request path
+            if params:
+                for item in params:
+                    if params[item] is None:
+                        del params[item]
+                        continue
+                request_path = request_path + "?" + urlencode(params)
 
-        signed_str = self.gen_sign(method, req.path, params, data, timestamp=timestamp)
+            signed_str = self.gen_sign(method, request_path, "", timestamp)
 
-        if method.upper() == "GET":
-            response = requests.get(
-                url,
-                params=params,
-                headers=self.get_common_headers(signed_str, timestamp),
-            )
         else:
-            response = requests.post(
-                url,
-                params=data,
-                headers=self.get_common_headers(signed_str, timestamp)
-            )
+            data = ""  # TODO: request.body
+            signed_str = self.gen_sign(method, request_path, data, timestamp)
 
-        if response.status_code != 200:
-            raise ValueError(response.text)
-        return response
+        header = self.get_common_headers(signed_str, timestamp)
+        return header
 
-    def get_common_headers(self, signed_str, timestamp):
-        headers = self.HEADERS.copy()
-        headers["X-COINEX-KEY"] = self.access_id
-        headers["X-COINEX-SIGN"] = signed_str
-        headers["X-COINEX-TIMESTAMP"] = timestamp
-        return headers
-
-    def gen_sign(self, method: RESTMethod, path, params: Dict[str, Any], body, timestamp):
-        request_path = path
-
-        if method.upper() == "GET" and params:
-            for item in params:
-                if params[item] is None:
-                    del params[item]
-            request_path = path + "?" + urlencode(params)
-
+    def gen_sign(self, method, request_path, body, timestamp):
         prepared_str = f"{method}{request_path}{body}{timestamp}"
-
         signature = hmac.new(
             bytes(self.secret_key, 'latin-1'),
             msg=bytes(prepared_str, 'latin-1'),
             digestmod=hashlib.sha256
         ).hexdigest().lower()
-
         return signature
+
+    def get_common_headers(self, signature, timestamp):
+        headers = self.HEADERS.copy()
+        headers["X-COINEX-KEY"] = self.access_id
+        headers["X-COINEX-SIGN"] = str(signature)
+        headers["X-COINEX-TIMESTAMP"] = str(timestamp)
+        return headers

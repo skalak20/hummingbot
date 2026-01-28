@@ -9,16 +9,17 @@ DEF_DOMAIN = "main"
 
 # REST endpoints
 BASE_PATH_URL = {
-    "main": "https://api.coinex.com/",
+    "main": "https://api.coinex.com",
 }
 
-PUBLIC_API_VERSION = "v2"
+# PUBLIC_API_VERSION = "/v1"
+# PRIVATE_API_VERSION = "/v2"
 
-SERVER_TIME_EP = "/time"
-SERVER_PING_EP = "/ping"
-ACCURACY_EP = "/account/info"
-TRADING_PAIRS_EP = "/spot/ticker"
-GET_BALANCE_PATH_URL = "/assets/spot/balance"
+SERVER_TIME_EP = "/v2/time"
+SERVER_PING_EP = "/v2/ping"
+TRADING_PAIRS_EP = "/v1/market/info"
+ACCURACY_EP = "/v2/account/info"
+GET_BALANCE_PATH_URL = "/v2/assets/spot/balance"
 
 # WSS endpoints
 WSS_SPOT_URL = "wss://socket.coinex.com/v2/spot"

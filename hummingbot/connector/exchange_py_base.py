@@ -5,6 +5,7 @@ import math
 from abc import ABC, abstractmethod
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, AsyncIterable, Callable, Dict, List, Optional, Tuple
+from urllib.parse import urlencode
 
 from async_timeout import timeout
 
@@ -909,7 +910,9 @@ class ExchangePyBase(ExchangeBase, ABC):
 
         for _ in range(2):
             try:
-                self.logger().debug(f"> {url}")
+                params_str = f"\n    params: {urlencode(params)}" if params else ""
+                data_str = f"\n    data: {data}" if data else ""
+                self.logger().debug(f"{method} > {url}{params_str}{data_str}")
 
                 request_result = await rest_assistant.execute_request(
                     url=url,
@@ -922,8 +925,9 @@ class ExchangePyBase(ExchangeBase, ABC):
                     headers=headers,
                 )
 
-                self.logger().debug(f"< {url} result:\r{request_result}")
+                self.logger().debug(f"{method} < {url}\n    result: {request_result}")
                 return request_result
+
             except IOError as request_exception:
                 last_exception = request_exception
                 if self._is_request_exception_related_to_time_synchronizer(request_exception=request_exception):

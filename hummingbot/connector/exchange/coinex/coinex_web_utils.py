@@ -18,9 +18,19 @@ def public_rest_url(path_url: str, domain: str = CONSTANTS.DEF_DOMAIN) -> str:
     :param domain: the domain to connect to ("main" or "testnet"). The default value is "main"
     :return: the full URL to the endpoint
     """
+    return CONSTANTS.BASE_PATH_URL[domain] + path_url  # + CONSTANTS.PUBLIC_API_VERSION
 
-    url = CONSTANTS.BASE_PATH_URL[domain] + CONSTANTS.PUBLIC_API_VERSION + path_url
-    return url
+
+def private_rest_url(path_url: str, domain: str = CONSTANTS.DEF_DOMAIN) -> str:
+    """
+    Creates a full URL for provided REST endpoint
+
+    :param path_url: a private REST endpoint
+    :param domain: the domain to connect to ("main" or "testnet"). The default value is "main"
+
+    :return: the full URL to the endpoint
+    """
+    return CONSTANTS.BASE_PATH_URL[domain] + path_url  # + CONSTANTS.PRIVATE_API_VERSION
 
 
 def build_api_factory(

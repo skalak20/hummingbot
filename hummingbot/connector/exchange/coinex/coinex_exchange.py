@@ -14,7 +14,6 @@ from hummingbot.connector.exchange.coinex import (
 from hummingbot.connector.exchange.coinex.coinex_api_order_book_data_source import CoinexAPIOrderBookDataSource
 from hummingbot.connector.exchange.coinex.coinex_api_user_stream_data_source import CoinexAPIUserStreamDataSource
 from hummingbot.connector.exchange.coinex.coinex_auth import CoinexAuth
-from hummingbot.connector.exchange.coinex.coinex_utils import convert_from_exchange_trading_pair
 from hummingbot.connector.exchange_py_base import ExchangePyBase
 from hummingbot.core.api_throttler.data_types import RateLimit
 from hummingbot.core.data_type.common import OrderType, TradeType
@@ -146,8 +145,10 @@ class CoinexExchange(ExchangePyBase):
 
     def _initialize_trading_pair_symbols_from_exchange_info(self, exchange_info: Dict[str, Any]):
         mapping = bidict()
-        for symbol_data in filter(coinex_utils.is_exchange_information_valid, exchange_info["data"]):
-            mapping[symbol_data] = convert_from_exchange_trading_pair(symbol_data if symbol_data is not None else "")
+        data = exchange_info.get("data", {})
+        symbol_datas = list(data.values())
+        for symbol_data in filter(coinex_utils.is_pair_information_valid, symbol_datas):
+            mapping[symbol_data["name"]] = coinex_utils.combine_to_hb_trading_pair(symbol_data)
         self._set_trading_pair_symbol_map(mapping)
 
     def _is_order_not_found_during_cancelation_error(self, cancelation_exception: Exception) -> bool:
@@ -194,10 +195,25 @@ class CoinexExchange(ExchangePyBase):
         """
         local_asset_names = set(self._account_balances.keys())
         remote_asset_names = set()
-        account_info = await self._api_get(
+
+        balance_response = await self._api_get(
             path_url=CONSTANTS.GET_BALANCE_PATH_URL,
+            # params={"market": "CETUSDT"},
             is_auth_required=True)
-        raise NotImplementedError
+
+        if balance_response and balance_response["code"] == 0 and isinstance(balance_response["data"], list) and any(balance_response["data"]):
+            for balance_entry in balance_response["data"]:
+                asset_name = balance_entry["ccy"]
+                available = Decimal(balance_entry["available"])
+                frozen = Decimal(balance_entry["frozen"])
+                self._account_available_balances[asset_name] = available
+                self._account_balances[asset_name] = available + frozen
+                remote_asset_names.add(asset_name)
+
+            asset_names_to_remove = local_asset_names.difference(remote_asset_names)
+            for asset_name in asset_names_to_remove:
+                del self._account_available_balances[asset_name]
+                del self._account_balances[asset_name]
 
     def _update_trading_fees(self):
         """

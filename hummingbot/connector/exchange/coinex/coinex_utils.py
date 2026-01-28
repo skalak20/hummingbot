@@ -1,4 +1,5 @@
 import time
+from typing import Any, Dict
 
 from pydantic import ConfigDict, Field, SecretStr
 
@@ -9,11 +10,20 @@ def get_timestamp() -> str:
     return str(int(time.time() * 1000)).split(".", maxsplit=1)[0]
 
 
-def convert_from_exchange_trading_pair(exchange_trading_pair: str):
-    if "_" not in exchange_trading_pair:
-        return None
-    base, quote = exchange_trading_pair.split("_")
-    return f"{base}-{quote}"
+def combine_to_hb_trading_pair(pair_info) -> str:
+    trading_pair = f"{pair_info["trading_name"]}-{pair_info["pricing_name"]}"
+    return trading_pair
+
+
+def is_pair_information_valid(pair_info: Dict[str, Any]) -> bool:
+    """
+    Verifies if a trading pair is enabled to operate with based on its market information
+
+    :param pair_info: the market information for a trading pair
+
+    :return: True if the trading pair is enabled, False otherwise
+    """
+    return pair_info["trading_name"] + pair_info["pricing_name"] == pair_info["name"]
 
 
 class CoinexConfigMap(BaseConnectorConfigMap):

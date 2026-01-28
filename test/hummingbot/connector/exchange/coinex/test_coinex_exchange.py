@@ -41,14 +41,8 @@ class CoinexExchangeTests(unittest.TestCase):
         super().setUp()
 
         self.log_records = []
-        self.client_config_map = ClientConfigAdapter(ClientConfigMap())
 
-        self.exchange = CoinexExchange(
-            client_config_map=self.client_config_map,
-            coinex_api_key=self.api_key,
-            coinex_api_secret=self.api_secret_key,
-            trading_pairs=[self.trading_pair]
-        )
+        self.exchange = self.create_exchange_instance()
 
         self.exchange.logger().setLevel(1)
         self.exchange.logger().addHandler(self)
@@ -61,6 +55,15 @@ class CoinexExchangeTests(unittest.TestCase):
         self._initialize_event_loggers()
 
         self.exchange._set_trading_pair_symbol_map(bidict({self.trading_pair: self.trading_pair}))
+
+    def create_exchange_instance(self):
+        client_config_map = ClientConfigAdapter(ClientConfigMap())
+        return CoinexExchange(
+            client_config_map=client_config_map,
+            coinex_api_key=self.api_key,
+            coinex_api_secret=self.api_secret_key,
+            trading_pairs=[self.trading_pair]
+        )
 
     def _initialize_event_loggers(self):
         self.buy_order_completed_logger = EventLogger()
@@ -135,6 +138,61 @@ class CoinexExchangeTests(unittest.TestCase):
         self.async_run_with_timeout(self.exchange._update_time_synchronizer())
 
         self.assertEqual(TEST_TS_SEC, self.exchange._time_synchronizer.time())
+
+    @aioresponses()
+    def test_update_balances(self, mock_api):
+        self.exchange._set_current_timestamp(TEST_TS_SEC)
+
+        url = web_utils.private_rest_url(CONSTANTS.GET_BALANCE_PATH_URL)
+        regex_url = re.compile(f"^{url}".replace(".", r"\.").replace("?", r"\?"))
+
+        response = {
+            "code": 0,
+            "data": [
+                {
+                    "ccy": "BTC",
+                    "available": "10.0",
+                    "frozen": "10.0"
+                },
+                {
+                    "ccy": "LTC",
+                    "available": "2000",
+                    "frozen": "0"
+                }
+            ]
+        }
+
+        mock_api.get(regex_url, body=json.dumps(response))
+        self.async_run_with_timeout(self.exchange._update_balances())
+
+        available_balances = self.exchange.available_balances
+        total_balances = self.exchange.get_all_balances()
+
+        self.assertEqual(Decimal("10"), available_balances["BTC"])
+        self.assertEqual(Decimal("2000"), available_balances["LTC"])
+        self.assertEqual(Decimal("20"), total_balances["BTC"])
+        self.assertEqual(Decimal("2000"), total_balances["LTC"])
+
+        response = {
+            "code": 0,
+            "data": [
+                {
+                    "ccy": "BTC",
+                    "available": "10.0",
+                    "frozen": "5.0"
+                }]
+        }
+
+        mock_api.get(regex_url, body=json.dumps(response))
+        self.async_run_with_timeout(self.exchange._update_balances())
+
+        available_balances = self.exchange.available_balances
+        total_balances = self.exchange.get_all_balances()
+
+        self.assertNotIn("LTC", available_balances)
+        self.assertNotIn("LTC", total_balances)
+        self.assertEqual(Decimal("10"), available_balances["BTC"])
+        self.assertEqual(Decimal("15"), total_balances["BTC"])
 
     @aioresponses()
     def test_create_limit_order_successfully(self, mock_api):
