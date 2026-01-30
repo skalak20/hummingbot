@@ -1,10 +1,16 @@
 import time
+from decimal import Decimal
 from typing import Any, Dict
 
 from pydantic import ConfigDict, Field, SecretStr
 
 from hummingbot.client.config.config_data_types import BaseConnectorConfigMap
+from hummingbot.core.data_type.trade_fee import TradeFeeSchema
 
+DEFAULT_FEES = TradeFeeSchema(
+    maker_percent_fee_decimal=Decimal("0.2"),
+    taker_percent_fee_decimal=Decimal("0.2"),
+)
 
 def get_timestamp() -> str:
     return str(int(time.time() * 1000)).split(".", maxsplit=1)[0]

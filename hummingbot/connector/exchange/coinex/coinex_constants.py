@@ -15,11 +15,11 @@ BASE_PATH_URL = {
 # PUBLIC_API_VERSION = "/v1"
 # PRIVATE_API_VERSION = "/v2"
 
-TRADING_PAIRS_EP = "/v1/market/info"
-
 SERVER_TIME_EP = "/v2/time"
 SERVER_PING_EP = "/v2/ping"
+TRADING_PAIRS_EP = "/v1/market/info"
 ACCOUNT_INFO_EP = "/v2/account/info"
+ACCOUNT_TRADE_FEE_EP = "/v2/account/trade-fee-rate"
 GET_BALANCE_PATH_URL = "/v2/assets/spot/balance"
 
 # WSS endpoints
@@ -33,17 +33,20 @@ OTHER_REQUESTS = "OTHER_REQUESTS"
 
 # Rate Limit time intervals
 ONE_SECOND = 1
+TWO_SECONDS = 2
 TEN_SECONDS = 10
 
 RATE_LIMITS = [
+    RateLimit(limit_id=SERVER_TIME_EP, limit=400, time_interval=ONE_SECOND),
+    RateLimit(limit_id=SERVER_PING_EP, limit=400, time_interval=ONE_SECOND),
+    RateLimit(limit_id=ACCOUNT_INFO_EP, limit=400, time_interval=ONE_SECOND),
+    RateLimit(limit_id=TRADING_PAIRS_EP, limit=400, time_interval=ONE_SECOND),
+    RateLimit(limit_id=ACCOUNT_TRADE_FEE_EP, limit=10, time_interval=ONE_SECOND),
+    RateLimit(limit_id=GET_BALANCE_PATH_URL, limit=10, time_interval=ONE_SECOND),
+
     RateLimit(limit_id=CREATE_ORDER, limit=500, time_interval=TEN_SECONDS),
     RateLimit(limit_id=CANCEL_ORDER, limit=500, time_interval=TEN_SECONDS),
     RateLimit(limit_id=OTHER_REQUESTS, limit=200, time_interval=TEN_SECONDS),
-    RateLimit(limit_id=SERVER_TIME_EP, limit=200, time_interval=TEN_SECONDS),
-    RateLimit(limit_id=SERVER_PING_EP, limit=200, time_interval=TEN_SECONDS),
-    RateLimit(limit_id=ACCOUNT_INFO_EP, limit=200, time_interval=TEN_SECONDS),
-    RateLimit(limit_id=TRADING_PAIRS_EP, limit=200, time_interval=TEN_SECONDS),
-    RateLimit(limit_id=GET_BALANCE_PATH_URL, limit=10, time_interval=ONE_SECOND),
     # RateLimit(limit_id=ORDER_TEST_EP, limit=200, time_interval=TEN_SECONDS),
     # RateLimit(limit_id=ORDER_CREATE_EP, limit=200, time_interval=TEN_SECONDS),
     # RateLimit(limit_id=ORDER_CREATE_BATCH_EP, limit=200, time_interval=TEN_SECONDS),

@@ -8,19 +8,22 @@ from bidict import bidict
 from hummingbot.connector.constants import s_decimal_NaN
 from hummingbot.connector.exchange.coinex import (
     coinex_constants as CONSTANTS,
-    coinex_utils,
+    coinex_utils as utils,
     coinex_web_utils as web_utils,
 )
+from hummingbot.connector.utils import combine_to_hb_trading_pair
 from hummingbot.connector.exchange.coinex.coinex_api_order_book_data_source import CoinexAPIOrderBookDataSource
 from hummingbot.connector.exchange.coinex.coinex_api_user_stream_data_source import CoinexAPIUserStreamDataSource
 from hummingbot.connector.exchange.coinex.coinex_auth import CoinexAuth
 from hummingbot.connector.exchange_py_base import ExchangePyBase
+from hummingbot.connector.trading_rule import TradingRule
 from hummingbot.core.api_throttler.data_types import RateLimit
 from hummingbot.core.data_type.common import OrderType, TradeType
 from hummingbot.core.data_type.in_flight_order import InFlightOrder, OrderUpdate, TradeUpdate
 from hummingbot.core.data_type.order_book_tracker_data_source import OrderBookTrackerDataSource
 from hummingbot.core.data_type.trade_fee import AddedToCostTradeFee
 from hummingbot.core.data_type.user_stream_tracker_data_source import UserStreamTrackerDataSource
+from hummingbot.core.utils.estimate_fee import build_trade_fee
 from hummingbot.core.web_assistant.auth import AuthBase
 from hummingbot.core.web_assistant.web_assistants_factory import WebAssistantsFactory
 
@@ -100,7 +103,7 @@ class CoinexExchange(ExchangePyBase):
 
     @property
     def trading_rules_request_path(self) -> str:
-        return CONSTANTS.ACCOUNT_INFO_EP
+        return CONSTANTS.TRADING_PAIRS_EP
 
     async def _all_trade_updates_for_order(self, order: InFlightOrder) -> List[TradeUpdate]:
         raise NotImplementedError
@@ -129,9 +132,28 @@ class CoinexExchange(ExchangePyBase):
             domain=self.domain,
             auth=self._auth)
 
-    def _format_trading_rules(self, exchange_info_dict: Dict[str, Any]):
-        trading_pair_rules = exchange_info_dict.get("symbols", [])
-        raise NotImplementedError
+    async def _format_trading_rules(self, exchange_info_dict: Dict[str, Any]) -> List[TradingRule]:
+        trading_rules = []
+        data = exchange_info_dict.get("data", {})
+        trading_pair_rules = list(data.values())
+        for info in trading_pair_rules:
+            if utils.is_pair_information_valid(info):
+                try:
+                    trading_pair = await self.trading_pair_associated_to_exchange_symbol(symbol=info.get("name"))
+                    min_amount = Decimal(info["min_amount"])
+                    base_increment = Decimal(f"1e-{info['trading_decimal']}")
+                    quote_increment = Decimal(f"1e-{info['pricing_decimal']}")
+                    trading_rules.append(
+                        TradingRule(trading_pair,
+                                    min_order_size=min_amount,
+                                    min_price_increment=quote_increment,
+                                    min_base_amount_increment=base_increment,
+                                    min_quote_amount_increment=quote_increment,
+                                    min_notional_size=quote_increment)
+                    )
+                except Exception:
+                    self.logger().error(f"Error parsing the trading pair rule {info}. Skipping.", exc_info=True)
+        return trading_rules
 
     def _get_fee(self,
                  base_currency: str,
@@ -141,14 +163,32 @@ class CoinexExchange(ExchangePyBase):
                  amount: Decimal,
                  price: Decimal = s_decimal_NaN,
                  is_maker: Optional[bool] = None) -> AddedToCostTradeFee:
-        raise NotImplementedError
+
+        is_maker = is_maker or (order_type is OrderType.LIMIT_MAKER)
+        trading_pair = combine_to_hb_trading_pair(base=base_currency, quote=quote_currency)
+        if trading_pair in self._trading_fees:
+            fees_data = self._trading_fees[trading_pair]
+            fee_value = Decimal(fees_data["maker_rate"]) if is_maker else Decimal(fees_data["taker_rate"])
+            fee = AddedToCostTradeFee(percent=fee_value)
+        else:
+            fee = build_trade_fee(
+                self.name,
+                is_maker,
+                base_currency=base_currency,
+                quote_currency=quote_currency,
+                order_type=order_type,
+                order_side=order_side,
+                amount=amount,
+                price=price,
+            )
+        return fee
 
     def _initialize_trading_pair_symbols_from_exchange_info(self, exchange_info: Dict[str, Any]):
         mapping = bidict()
         data = exchange_info.get("data", {})
         symbol_datas = list(data.values())
-        for symbol_data in filter(coinex_utils.is_pair_information_valid, symbol_datas):
-            mapping[symbol_data["name"]] = coinex_utils.combine_to_hb_trading_pair(symbol_data)
+        for symbol_data in filter(utils.is_pair_information_valid, symbol_datas):
+            mapping[symbol_data["name"]] = combine_to_hb_trading_pair(base=symbol_data["trading_name"], quote=symbol_data["pricing_name"])
         self._set_trading_pair_symbol_map(mapping)
 
     def _is_order_not_found_during_cancelation_error(self, cancelation_exception: Exception) -> bool:
@@ -215,14 +255,30 @@ class CoinexExchange(ExchangePyBase):
                 del self._account_available_balances[asset_name]
                 del self._account_balances[asset_name]
 
-    def _update_trading_fees(self):
+    async def _update_trading_fees(self):
         """
         Update fees information from the exchange
         """
-        raise NotImplementedError
+        fees_json = []
+        for trading_pair in self._trading_pairs:
+            exchange_symbol = await self.exchange_symbol_associated_to_pair(trading_pair=trading_pair)
+            params = {
+                "market_type": "SPOT",
+                "market": exchange_symbol,
+            }
+            resp = await self._api_get(
+                path_url=CONSTANTS.ACCOUNT_TRADE_FEE_EP,
+                params=params,
+                is_auth_required=True,
+            )
+            fees_json.append(resp["data"])
+
+        for fee_json in fees_json:
+            trading_pair = await self.trading_pair_associated_to_exchange_symbol(symbol=fee_json["market"])
+            self._trading_fees[trading_pair] = fee_json
 
     def _user_stream_event_listener(self):
         raise NotImplementedError
 
     def supported_order_types(self) -> List[OrderType]:
-        raise NotImplementedError
+        return [OrderType.LIMIT, OrderType.MARKET, OrderType.LIMIT_MAKER]
