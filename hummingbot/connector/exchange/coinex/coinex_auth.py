@@ -2,7 +2,7 @@ import hashlib
 import hmac
 import time
 from typing import Any, Dict
-from urllib.parse import urlencode, urlparse
+from urllib.parse import urlencode
 
 from hummingbot.connector.exchange.coinex.coinex_utils import get_timestamp
 from hummingbot.connector.time_synchronizer import TimeSynchronizer
@@ -20,11 +20,13 @@ class CoinexAuth(AuthBase):
         "X-COINEX-TIMESTAMP": "",
     }
 
+
     def __init__(self, api_key: str, api_secret: str, time_provider: TimeSynchronizer):
         self.access_id = api_key
         self.secret_key = api_secret
         self.time_provider = time_provider
         self.headers = self.HEADERS.copy()
+
 
     async def rest_authenticate(self, request: RESTRequest) -> RESTRequest:
         """
@@ -39,6 +41,7 @@ class CoinexAuth(AuthBase):
         headers.update(self.authentication_headers(request=request))
         request.headers = headers
         return request
+
 
     async def ws_authenticate(self, request: WSRequest) -> WSRequest:
         """
@@ -65,8 +68,7 @@ class CoinexAuth(AuthBase):
             signed_str = self.gen_sign(method, request_path, "", timestamp)
 
         else:
-            data = ""  # TODO: request.body
-            signed_str = self.gen_sign(method, request_path, data, timestamp)
+            signed_str = self.gen_sign(method, request_path, request.data, timestamp)
 
         header = self.get_common_headers(signed_str, timestamp)
         return header
@@ -75,8 +77,8 @@ class CoinexAuth(AuthBase):
         prepared_str = f"{method}{request_path}{body}{timestamp}"
         signature = hmac.new(
             bytes(self.secret_key, 'latin-1'),
-            msg=bytes(prepared_str, 'latin-1'),
-            digestmod=hashlib.sha256
+            bytes(prepared_str, 'latin-1'),
+            hashlib.sha256
         ).hexdigest().lower()
         return signature
 

@@ -3,7 +3,7 @@ import json
 import re
 import unittest
 from decimal import Decimal
-from typing import Awaitable
+from typing import Awaitable, Optional, List
 from unittest.mock import patch
 
 from aioresponses import aioresponses
@@ -17,10 +17,11 @@ from hummingbot.connector.trading_rule import TradingRule
 from hummingbot.core.event.event_logger import EventLogger
 from hummingbot.core.event.events import MarketEvent
 
-TEST_TS_SEC = 1640000003
+TEST_TS_SEC = 1640000003.356
 TEST_KEY = "560CE33AA5E845929981B163ABD2B25F"
 TEST_SECRET = "CB83A671B4F31671138589A7C8805D0C79FEEA9B298A14C7"
-
+TEST_BASE = "CET"
+TEST_QUOTE = "USDT"
 
 class CoinexExchangeTests(unittest.TestCase):
     # the level is required to receive logs from the data source logger
@@ -33,14 +34,15 @@ class CoinexExchangeTests(unittest.TestCase):
         # ag
         cls.api_key = TEST_KEY
         cls.api_secret_key = TEST_SECRET
-        cls.base_asset = "CET"
-        cls.quote_asset = "USDT"
+        cls.base_asset = TEST_BASE
+        cls.quote_asset = TEST_QUOTE
         cls.trading_pair = f"{cls.base_asset}{cls.quote_asset}"
 
     def setUp(self) -> None:
         super().setUp()
 
         self.log_records = []
+        self.test_task: Optional[asyncio.Task] = None
 
         self.exchange = self.create_exchange_instance()
 
@@ -55,6 +57,10 @@ class CoinexExchangeTests(unittest.TestCase):
         self._initialize_event_loggers()
 
         self.exchange._set_trading_pair_symbol_map(bidict({self.trading_pair: self.trading_pair}))
+
+    def tearDown(self) -> None:
+        self.test_task and self.test_task.cancel()
+        super().tearDown()
 
     def create_exchange_instance(self):
         client_config_map = ClientConfigAdapter(ClientConfigMap())
@@ -106,6 +112,8 @@ class CoinexExchangeTests(unittest.TestCase):
             )
         }
 
+    #region SERVER_TIME
+
     @aioresponses()
     def test_update_time_synchronizer_failure_is_logged(self, mock_api):
         url = web_utils.public_rest_url(CONSTANTS.SERVER_TIME_EP)
@@ -129,7 +137,11 @@ class CoinexExchangeTests(unittest.TestCase):
         url = web_utils.public_rest_url(CONSTANTS.SERVER_TIME_EP)
         regex_url = re.compile(f"^{url}".replace(".", r"\.").replace("?", r"\?"))
 
-        response = {"code": 0, "message": "OK", "data": {"timestamp": TEST_TS_SEC * 1e3}}
+        response = {
+            "code": 0,
+            "data": { "timestamp": TEST_TS_SEC * 1e3 },
+            "message": "OK",
+        }
 
         mock_api.get(regex_url,
                      body=json.dumps(response),
@@ -138,6 +150,77 @@ class CoinexExchangeTests(unittest.TestCase):
         self.async_run_with_timeout(self.exchange._update_time_synchronizer())
 
         self.assertEqual(TEST_TS_SEC, self.exchange._time_synchronizer.time())
+
+    @aioresponses()
+    def test_update_time_synchronizer_raises_cancelled_error(self, mock_api):
+        url = web_utils.public_rest_url(CONSTANTS.SERVER_TIME_EP)
+        regex_url = re.compile(f"^{url}".replace(".", r"\.").replace("?", r"\?"))
+
+        mock_api.get(regex_url, exception=asyncio.CancelledError)
+
+        self.assertRaises(
+            asyncio.CancelledError,
+            self.async_run_with_timeout, self.exchange._update_time_synchronizer())
+
+    #endregion SERVER_TIME
+
+    #region TRADING_PAIRS
+    
+    @aioresponses()
+    def test_all_trading_pairs(self, mock_api):
+        self.exchange._set_trading_pair_symbol_map(None)
+        url = web_utils.public_rest_url(path_url=CONSTANTS.TRADING_PAIRS_EP)
+
+        resp = {
+            "code": 0,
+            "data": {
+                f"{TEST_BASE}{TEST_QUOTE}": {
+                    "name": f"{TEST_BASE}{TEST_QUOTE}",
+                    "min_amount": "50000000",
+                    "maker_fee_rate": "0.003",
+                    "taker_fee_rate": "0.003",
+                    "pricing_name": TEST_QUOTE,
+                    "pricing_decimal": 12,
+                    "trading_name": TEST_BASE,
+                    "trading_decimal": 2,
+                },
+                "SOME-PAIR":{
+                    "name": "SOME-PAIR",
+                    "min_amount": "50",
+                    "maker_fee_rate": "0.003",
+                    "taker_fee_rate": "0.003",
+                    "pricing_name": "PAIR",
+                    "pricing_decimal": 6,
+                    "trading_name": "SOME",
+                    "trading_decimal": 8,
+                }
+            },
+            "message": "OK"
+        }
+        mock_api.get(url, body=json.dumps(resp))
+
+        ret = self.async_run_with_timeout(coroutine=self.exchange.all_trading_pairs())
+
+        self.assertEqual(1, len(ret))
+        self.assertIn(f"{TEST_BASE}-{TEST_QUOTE}", ret)
+        self.assertNotIn("SOME-PAIR", ret)
+
+    @aioresponses()
+    def test_all_trading_pairs_does_not_raise_exception(self, mock_api):
+        self.exchange._set_trading_pair_symbol_map(None)
+
+        url = web_utils.public_rest_url(path_url=CONSTANTS.TRADING_PAIRS_EP)
+        regex_url = re.compile(f"^{url}".replace(".", r"\.").replace("?", r"\?"))
+
+        mock_api.get(regex_url, exception=Exception)
+
+        result: List[str] = self.async_run_with_timeout(self.exchange.all_trading_pairs())
+
+        self.assertEqual(0, len(result))
+
+    #endregion TRADING_PAIRS
+    
+    #region GET_BALANCE
 
     @aioresponses()
     def test_update_balances(self, mock_api):
@@ -159,7 +242,8 @@ class CoinexExchangeTests(unittest.TestCase):
                     "available": "2000",
                     "frozen": "0"
                 }
-            ]
+            ],
+            "message": "OK",
         }
 
         mock_api.get(regex_url, body=json.dumps(response))
@@ -193,6 +277,8 @@ class CoinexExchangeTests(unittest.TestCase):
         self.assertNotIn("LTC", total_balances)
         self.assertEqual(Decimal("10"), available_balances["BTC"])
         self.assertEqual(Decimal("15"), total_balances["BTC"])
+
+    #endregion GET_BALANCE
 
     @aioresponses()
     def test_create_limit_order_successfully(self, mock_api):

@@ -100,7 +100,7 @@ class CoinexExchange(ExchangePyBase):
 
     @property
     def trading_rules_request_path(self) -> str:
-        return CONSTANTS.ACCURACY_EP
+        return CONSTANTS.ACCOUNT_INFO_EP
 
     async def _all_trade_updates_for_order(self, order: InFlightOrder) -> List[TradeUpdate]:
         raise NotImplementedError

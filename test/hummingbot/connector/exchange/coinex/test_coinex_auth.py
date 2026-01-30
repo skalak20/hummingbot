@@ -1,15 +1,15 @@
 import asyncio
-import base64
 import hashlib
 import hmac
+import json
 from typing import Awaitable
+from urllib.parse import urlencode
 from unittest import TestCase
-from unittest.mock import MagicMock, patch
-
-from aioresponses import aioresponses
+from unittest.mock import MagicMock
 
 from hummingbot.connector.exchange.coinex.coinex_auth import CoinexAuth
-from hummingbot.core.web_assistant.connections.data_types import RESTMethod, RESTRequest
+from hummingbot.core.web_assistant.connections.data_types import RESTMethod, RESTRequest, WSJSONRequest
+from hummingbot.connector.exchange.coinex import coinex_constants as CONSTANTS, coinex_web_utils as web_utils
 
 TEST_TS_SEC = 1700490703.564
 TEST_KEY = "560CE33AA5E845929981B163ABD2B25F"
@@ -28,63 +28,92 @@ class CoinexAuthTests(TestCase):
 
         self._auth = CoinexAuth(
             api_key=self._api_key,
-            secret_key=self._secret_key,
-            time_provider=self._mock_time_provider,
-        )
+            api_secret=self._secret_key,
+            time_provider=self._mock_time_provider)
 
-    def async_run_with_timeout(self, coroutine: Awaitable, timeout: int = 1):
+    def _async_run_with_timeout(self, coroutine: Awaitable, timeout: int = 1):
         ret = asyncio.get_event_loop().run_until_complete(asyncio.wait_for(coroutine, timeout))
         return ret
+    
+    def _sign(self, message: str, key: str) -> str:
+        signed_message = hmac.new(
+            bytes(key, "latin-1"),
+            bytes(message, "latin-1"),
+            hashlib.sha256
+        ).hexdigest().lower()
+        return signed_message
 
-    def test_rest_authenticate(self):
-        now = 1753095319.000
-        mock_time_provider = MagicMock()
-        mock_time_provider.time.return_value = now
-
-		# Place a limit order
-        test_method = RESTMethod.POST
-        test_url = "/spot/order"
-        test_params = {
-            "market": "CETUSDT",
-            "market_type": "SPOT",
-            "side": "buy",
-            "type": "limit",
-            "amount": "10000",
-            "price": "1",
-            "client_id": "order1",
-            "is_hide": True,
-        }
-
-        request = RESTRequest(method=test_method, url=test_url, params=test_params, is_auth_required=True)
-        configured_request = self.async_run_with_timeout(self._auth.rest_authenticate(request))
-
-        test_params.update({"timestamp": TEST_TS_SEC * 1e3})
-        for key, value in test_params.items():
-            api_post += f"&{key}={value}"
-
-        api_sha256: bytes = hashlib.sha256(bytes(api_post, 'utf-8')).digest()
-        api_secret = base64.b64decode(self._secret_key)
-        api_path: bytes = bytes(request.url, 'utf-8')
-
-        api_hmac: hmac.HMAC = hmac.new(api_secret, api_path + "?" + api_sha256, hashlib.sha512)
-        expected_signature: bytes = base64.b64encode(api_hmac.digest())
-        # auth = CoinexAuth(api_key=self._api_key, secret_key=self._secret, time_provider=mock_time_provider)
-
-        self.assertEqual(configured_request.headers["X-COINEX-SIGN"], str(expected_signature, 'utf-8'))
-        self.assertEqual(configured_request.headers["X-COINEX-KEY"], self._api_key, )
-        self.assertEqual(configured_request.headers["X-COINEX-TIMESTAMP"], TEST_TS_SEC * 1e3)
-
-    @aioresponses()
-    def test_add_auth_headers_to_get_request_with_params(self, mock_api):
+    def test_add_auth_headers_to_get_request_without_params(self):
+        url = web_utils.private_rest_url(path_url=CONSTANTS.SERVER_TIME_EP)
+        
         request = RESTRequest(
             method=RESTMethod.GET,
-            url="https://test.url/api/ping",
-            params={"param_z": "value_param_z", "param_a": "value_param_a"},
+            url=url,
             is_auth_required=True,
-            throttler_limit_id="/api/ping"
+            throttler_limit_id=CONSTANTS.SERVER_TIME_EP
         )
 
-        self.async_run_with_timeout(self._auth.rest_authenticate(request))
+        self._async_run_with_timeout(self._auth.rest_authenticate(request))
 
-        self.assertEqual(self.api_key, request.headers["X-COINEX-KEY"])
-        self.assertEqual(TEST_TS_SEC * 1e3, request.headers["X-COINEX-TIMESTAMP"])
+        test_timestamp = f"{TEST_TS_SEC * 1e3:.0f}"
+        full_endpoint = f"GET{request.throttler_limit_id}{test_timestamp}"
+        expected_signature = self._sign(message=full_endpoint, key=TEST_SECRET)
+        self.assertEqual(request.headers["X-COINEX-SIGN"], expected_signature)
+        self.assertEqual(request.headers["X-COINEX-KEY"], TEST_KEY)
+        self.assertEqual(request.headers["X-COINEX-TIMESTAMP"], test_timestamp)
+
+    def test_add_auth_headers_to_get_request_with_params(self):
+        CURRENT_TS = f"{TEST_TS_SEC * 1e3:.0f}"
+        url = web_utils.private_rest_url(path_url=CONSTANTS.SERVER_TIME_EP)
+        params = {
+            "param_a": "value_param_a",
+            "param_z": "value_param_z",
+        }
+
+        request = RESTRequest(
+            method=RESTMethod.GET,
+            url=url,
+            params=params,
+            is_auth_required=True,
+            throttler_limit_id=CONSTANTS.SERVER_TIME_EP
+        )
+
+        self._async_run_with_timeout(self._auth.rest_authenticate(request))
+
+        full_endpoint = f"GET{request.throttler_limit_id}?{urlencode(params)}{CURRENT_TS}"
+        expected_signature = self._sign(message=full_endpoint, key=TEST_SECRET)
+        self.assertEqual(request.headers["X-COINEX-SIGN"], expected_signature)
+        self.assertEqual(request.headers["X-COINEX-KEY"], TEST_KEY)
+        self.assertEqual(request.headers["X-COINEX-TIMESTAMP"], CURRENT_TS)
+
+    def test_add_auth_headers_to_post_request(self):
+        CURRENT_TS = f"{TEST_TS_SEC * 1e3:.0f}"
+        TEST_EP = "/api/endpoint"
+        body = {
+            "param_a": "value_param_a",
+            "param_z": "value_param_z",
+        }
+
+        request = RESTRequest(
+            method=RESTMethod.POST,
+            url=f"https://test.url{TEST_EP}",
+            data=json.dumps(body),
+            is_auth_required=True,
+            throttler_limit_id=TEST_EP
+        )
+
+        self._async_run_with_timeout(self._auth.rest_authenticate(request))
+
+        full_endpoint = f"POST{request.throttler_limit_id}{json.dumps(body)}{CURRENT_TS}"
+        expected_signature = self._sign(message=full_endpoint, key=TEST_SECRET)
+        self.assertEqual(request.headers["X-COINEX-SIGN"], expected_signature)
+        self.assertEqual(request.headers["X-COINEX-KEY"], TEST_KEY)
+        self.assertEqual(request.headers["X-COINEX-TIMESTAMP"], CURRENT_TS)
+
+    def test_no_auth_added_to_wsrequest(self):
+        payload = {"param1": "value_param_1"}
+        request = WSJSONRequest(payload=payload, is_auth_required=True)
+
+        self._async_run_with_timeout(self._auth.ws_authenticate(request))
+
+        self.assertEqual(payload, request.payload)
