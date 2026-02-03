@@ -50,10 +50,6 @@ class CoinexExchange(ExchangePyBase):
         self.logger().setLevel(level=logging.DEBUG)
         super().__init__(client_config_map)
 
-    @staticmethod
-    def lbank_order_type(trade_type: TradeType, order_type: OrderType) -> str:
-        None
-
     @property
     def name(self) -> str:
         return "coinex"
@@ -83,7 +79,7 @@ class CoinexExchange(ExchangePyBase):
 
     @property
     def is_cancel_request_in_exchange_synchronous(self) -> bool:
-        raise NotImplementedError
+        return True
 
     @property
     def is_trading_required(self) -> bool:
@@ -192,7 +188,11 @@ class CoinexExchange(ExchangePyBase):
         self._set_trading_pair_symbol_map(mapping)
 
     def _is_order_not_found_during_cancelation_error(self, cancelation_exception: Exception) -> bool:
-        raise NotImplementedError
+        # TODO: implement this method correctly for the connector
+        # The default implementation was added when the functionality to detect not found orders was introduced in the
+        # ExchangePyBase class. Also fix the unit test test_cancel_order_not_found_in_the_exchange when replacing the
+        # dummy implementation
+        return False
 
     def _is_order_not_found_during_status_update_error(self, status_update_exception: Exception) -> bool:
         raise NotImplementedError
@@ -202,7 +202,54 @@ class CoinexExchange(ExchangePyBase):
         return CONSTANTS.RET_MSG_AUTH_TIMESTAMP_ERROR in error_description
 
     async def _place_cancel(self, order_id: str, tracked_order: InFlightOrder):
-        raise NotImplementedError
+        exchange_symbol = await self.exchange_symbol_associated_to_pair(trading_pair=tracked_order.trading_pair)
+        exchange_order_id = await tracked_order.get_exchange_order_id()
+        # exchange_order_id = tracked_order.exchange_order_id
+        if exchange_order_id is None:
+            return await self._place_cancel_by_client_id(exchange_symbol, tracked_order.client_order_id, tracked_order)
+        else:
+            return await self._place_cancel_by_order_id(exchange_symbol, exchange_order_id)
+
+    async def _place_cancel_by_client_id(self, exchange_symbol, client_order_id) -> bool:
+        api_params = {
+            "market": exchange_symbol,
+            "market_type": "SPOT",
+            "client_id": client_order_id}
+
+        response = await self._api_post(
+            path_url=CONSTANTS.ORDERS_CANCEL_BY_CLIENTID_EP,
+            data=api_params,
+            is_auth_required=True)
+
+        if response["code"] != 0:
+            raise ValueError(f"{response['message']}")
+
+        orders_list = response["data"]
+        if isinstance(orders_list, list):
+            found_order = next((x for x in orders_list if (lambda n: n["code"] == 0 and n["data"]['client_id'] == client_order_id)(x)), None)
+            if found_order:
+                return True
+
+        return False
+
+    async def _place_cancel_by_order_id(self, exchange_symbol, exchange_order_id) -> bool:
+        api_params = {
+            "market": exchange_symbol,
+            "market_type": "SPOT",
+            "order_id": exchange_order_id}
+
+        cancel_result = await self._api_post(
+            path_url=CONSTANTS.ORDERS_CANCEL_EP,
+            data=api_params,
+            is_auth_required=True)
+
+        if cancel_result["code"] != 0:
+            raise ValueError(f"{cancel_result['message']}")
+
+        if cancel_result.get("data") is not None:
+            return cancel_result["data"]["order_id"] == exchange_order_id
+
+        return False
 
     async def _place_order(self,
                            order_id: str,
@@ -212,7 +259,27 @@ class CoinexExchange(ExchangePyBase):
                            order_type: OrderType,
                            price: Decimal,
                            **kwargs) -> Tuple[str, float]:
-        raise NotImplementedError
+        side = trade_type.name.lower()
+        order_type_str = "market" if order_type == OrderType.MARKET else "limit"
+        data = {
+            "amount": str(amount),
+            "client_id": order_id,
+            "side": side,
+            "market": await self.exchange_symbol_associated_to_pair(trading_pair=trading_pair),
+            "type": order_type_str,
+        }
+        if order_type is OrderType.LIMIT:
+            data["price"] = str(price)
+        elif order_type is OrderType.LIMIT_MAKER:
+            data["price"] = str(price)
+            data["type"] = "maker_only"
+        exchange_order_response = await self._api_post(
+            path_url=CONSTANTS.ORDER_CREATE_EP,
+            data=data,
+            is_auth_required=True)
+        if exchange_order_response.get("code") != 0:
+            raise IOError(f"Error placing order on Coinex: {exchange_order_response.get("message")}")
+        return str(exchange_order_response["data"]["order_id"]), self.current_timestamp
 
     async def _request_order_status(self, tracked_order: InFlightOrder) -> OrderUpdate:
         symbol = await self.exchange_symbol_associated_to_pair(trading_pair=tracked_order.trading_pair)

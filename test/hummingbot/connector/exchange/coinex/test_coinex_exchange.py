@@ -3,8 +3,8 @@ import json
 import re
 import unittest
 from decimal import Decimal
-from typing import Awaitable, Dict, Optional, List
-from unittest.mock import patch
+from typing import Awaitable, Dict, NamedTuple, Optional, List
+from unittest.mock import MagicMock, patch
 
 from aioresponses import aioresponses
 from bidict import bidict
@@ -16,11 +16,12 @@ from hummingbot.connector.exchange.coinex.coinex_exchange import CoinexExchange
 from hummingbot.connector.trading_rule import TradingRule
 from hummingbot.core.data_type.common import OrderType, TradeType
 from hummingbot.core.event.event_logger import EventLogger
-from hummingbot.core.event.events import MarketEvent
+from hummingbot.core.event.events import BuyOrderCreatedEvent, MarketEvent, MarketOrderFailureEvent, OrderCancelledEvent
 from hummingbot.core.network_iterator import NetworkStatus
+from hummingbot.core.web_assistant.connections.data_types import RESTMethod
 
 
-TEST_TS_SEC = 1640000003.356
+TEST_TIMESTAMP_SEC = 1640000003.356
 TEST_KEY = "560CE33AA5E845929981B163ABD2B25F"
 TEST_SECRET = "CB83A671B4F31671138589A7C8805D0C79FEEA9B298A14C7"
 TEST_BASE = "CET"
@@ -43,6 +44,7 @@ class CoinexExchangeTests(unittest.TestCase):
         cls.base_asset = TEST_BASE
         cls.quote_asset = TEST_QUOTE
         cls.trading_pair = f"{TEST_BASE}-{TEST_QUOTE}"
+        cls.ex_trading_pair = f"{TEST_BASE}{TEST_QUOTE}"
 
     def setUp(self) -> None:
         super().setUp()
@@ -137,16 +139,44 @@ class CoinexExchangeTests(unittest.TestCase):
             )
         }
 
-    def _setup_get(self, mock_api, url, response = None, status = None, exception = None, callback = None):
+    def _simulate_trading_fees_initialized(self):
+        fee_rates = {
+            "market": self.ex_trading_pair,
+            "taker_rate": str(0.0002),
+            "maker_rate": str(0.0001),
+        }
+        self.exchange._trading_fees[self.trading_pair] = fee_rates
+
+    def _validate_auth_credentials_present(self, request_call_tuple: NamedTuple):
+        request_headers = request_call_tuple.kwargs["headers"]
+        self.assertIn("Content-Type", request_headers)
+        self.assertIn("X-COINEX-KEY", request_headers)
+        self.assertIn("X-COINEX-SIGN", request_headers)
+        self.assertIn("X-COINEX-TIMESTAMP", request_headers)
+
+    def _setup_call(self, mock_api, url, method = RESTMethod.GET, status = None, response = None, exception = None, callback = None):
         regex_url = re.compile(f"^{url}".replace(".", r"\.").replace("?", r"\?"))
-        regex_url = re.compile(f"^{url}".replace(".", r"\.").replace("?", r"\?"))
-        
-        if response:
-            mock_api.get(regex_url, body=json.dumps(response), callback=callback)
-        elif status:
-            mock_api.get(regex_url, status=status, callback=callback)
-        elif exception:
-            mock_api.get(regex_url, exception=exception, callback=callback)
+        if method == RESTMethod.GET:
+            if status:
+                mock_api.get(regex_url, status=status, callback=callback)
+            elif response:
+                mock_api.get(regex_url, body=json.dumps(response), callback=callback)
+            elif exception:
+                mock_api.get(regex_url, exception=exception, callback=callback)
+
+        if method == RESTMethod.POST:
+            if status:
+                mock_api.post(regex_url, status=status, callback=callback)
+            elif response:
+                mock_api.post(regex_url, body=json.dumps(response), callback=callback)
+            elif exception:
+                mock_api.post(regex_url, exception=exception, callback=callback)
+
+    def _setup_get(self, mock_api, url, status = None, response = None, exception = None, callback = None):
+        self._setup_call(mock_api, url, RESTMethod.GET, status, response, exception, callback)
+
+    def _setup_post(self, mock_api, url, status = None, response = None, exception = None, callback = None):
+        self._setup_call(mock_api, url, RESTMethod.POST, status, response, exception, callback)
 
     #endregion MANAGING
 
@@ -154,9 +184,9 @@ class CoinexExchangeTests(unittest.TestCase):
 
     @aioresponses()
     def test_check_network_success(self, mock_api):
-        url = web_utils.public_rest_url(CONSTANTS.SERVER_PING_EP)
+        url = web_utils.rest_url(CONSTANTS.SERVER_PING_EP)
         resp = { "code": 0, "data": { "result":"pong" }, "message": "OK" }
-        self._setup_get(mock_api, url, resp)
+        self._setup_get(mock_api, url, response=resp)
 
         ret = self.async_run_with_timeout(coroutine=self.exchange.check_network())
 
@@ -164,7 +194,7 @@ class CoinexExchangeTests(unittest.TestCase):
 
     @aioresponses()
     def test_check_network_failure(self, mock_api):
-        url = web_utils.public_rest_url(CONSTANTS.SERVER_PING_EP)
+        url = web_utils.rest_url(CONSTANTS.SERVER_PING_EP)
         self._setup_get(mock_api, url, status=500)
 
         ret = self.async_run_with_timeout(coroutine=self.exchange.check_network())
@@ -173,7 +203,7 @@ class CoinexExchangeTests(unittest.TestCase):
 
     @aioresponses()
     def test_check_network_raises_cancel_exception(self, mock_api):
-        url = web_utils.public_rest_url(CONSTANTS.SERVER_PING_EP)
+        url = web_utils.rest_url(CONSTANTS.SERVER_PING_EP)
         self._setup_get(mock_api, url, exception=asyncio.CancelledError)
 
         self.assertRaises(asyncio.CancelledError, self.async_run_with_timeout, self.exchange.check_network())
@@ -184,9 +214,9 @@ class CoinexExchangeTests(unittest.TestCase):
 
     @aioresponses()
     def test_update_time_synchronizer_failure_is_logged(self, mock_api):
-        url = web_utils.public_rest_url(CONSTANTS.SERVER_TIME_EP)
+        url = web_utils.rest_url(CONSTANTS.SERVER_TIME_EP)
         response = {"code": -1, "message": "error"}
-        self._setup_get(mock_api, url, response)
+        self._setup_get(mock_api, url=url, response=response)
 
         self.async_run_with_timeout(self.exchange._update_time_synchronizer())
 
@@ -196,26 +226,26 @@ class CoinexExchangeTests(unittest.TestCase):
     @patch("hummingbot.connector.time_synchronizer.TimeSynchronizer._current_seconds_counter")
     def test_update_time_synchronizer_successfully(self, mock_api, seconds_counter_mock):
         request_sent_event = asyncio.Event()
-        seconds_counter_mock.side_effect = [TEST_TS_SEC, TEST_TS_SEC, TEST_TS_SEC]
+        seconds_counter_mock.side_effect = [TEST_TIMESTAMP_SEC, TEST_TIMESTAMP_SEC, TEST_TIMESTAMP_SEC]
 
         self.exchange._time_synchronizer.clear_time_offset_ms_samples()
 
-        url = web_utils.public_rest_url(CONSTANTS.SERVER_TIME_EP)
+        url = web_utils.rest_url(CONSTANTS.SERVER_TIME_EP)
         response = {
             "code": 0,
-            "data": { "timestamp": TEST_TS_SEC * 1e3 },
             "message": "OK",
+            "data": { "timestamp": TEST_TIMESTAMP_SEC * 1e3 },
         }
 
-        self._setup_get(mock_api, url, response, callback=lambda *args, **kwargs: request_sent_event.set())
+        self._setup_get(mock_api, url, response=response, callback=lambda *args, **kwargs: request_sent_event.set())
 
         self.async_run_with_timeout(self.exchange._update_time_synchronizer())
 
-        self.assertEqual(TEST_TS_SEC, self.exchange._time_synchronizer.time())
+        self.assertEqual(TEST_TIMESTAMP_SEC, self.exchange._time_synchronizer.time())
 
     @aioresponses()
     def test_update_time_synchronizer_raises_cancelled_error(self, mock_api):
-        url = web_utils.public_rest_url(CONSTANTS.SERVER_TIME_EP)
+        url = web_utils.rest_url(CONSTANTS.SERVER_TIME_EP)
         self._setup_get(mock_api, url, exception=asyncio.CancelledError)
 
         self.assertRaises(
@@ -228,9 +258,9 @@ class CoinexExchangeTests(unittest.TestCase):
 
     @aioresponses()
     def test_update_trading_rules(self, mock_api):
-        self.exchange._set_current_timestamp(TEST_TS_SEC)
+        self.exchange._set_current_timestamp(TEST_TIMESTAMP_SEC)
 
-        url = web_utils.public_rest_url(CONSTANTS.TRADING_PAIRS_EP)
+        url = web_utils.rest_url(CONSTANTS.TRADING_PAIRS_EP)
         resp = self.get_exchange_rules_mock()
         self._setup_get(mock_api, url, response=resp)
 
@@ -240,12 +270,13 @@ class CoinexExchangeTests(unittest.TestCase):
 
     @aioresponses()
     def test_update_trading_rules_ignores_rule_with_error(self, mock_api):
-        self.exchange._set_current_timestamp(TEST_TS_SEC)
+        self.exchange._set_current_timestamp(TEST_TIMESTAMP_SEC)
 
-        url = web_utils.public_rest_url(CONSTANTS.TRADING_PAIRS_EP)
+        url = web_utils.rest_url(CONSTANTS.TRADING_PAIRS_EP)
         trading_pair = f"{TEST_BASE}{TEST_QUOTE}"
         resp = {
             "code": 0,
+            "message": "OK",
             "data": {
                 f"{trading_pair}":
                 {
@@ -254,7 +285,6 @@ class CoinexExchangeTests(unittest.TestCase):
                     "pricing_name": TEST_QUOTE,
                 },
             },
-            "message": "OK",
         }
 
         self._setup_get(mock_api, url, response=resp)
@@ -269,9 +299,10 @@ class CoinexExchangeTests(unittest.TestCase):
     @aioresponses()
     def test_all_trading_pairs(self, mock_api):
         self.exchange._set_trading_pair_symbol_map(None)
-        url = web_utils.public_rest_url(path_url=CONSTANTS.TRADING_PAIRS_EP)
+        url = web_utils.rest_url(path_url=CONSTANTS.TRADING_PAIRS_EP)
         resp = {
             "code": 0,
+            "message": "OK",
             "data": {
                 f"{TEST_BASE}{TEST_QUOTE}": {
                     "name": f"{TEST_BASE}{TEST_QUOTE}",
@@ -294,7 +325,6 @@ class CoinexExchangeTests(unittest.TestCase):
                     "trading_decimal": 8,
                 }
             },
-            "message": "OK"
         }
         
         self._setup_get(mock_api, url, response=resp)
@@ -309,7 +339,7 @@ class CoinexExchangeTests(unittest.TestCase):
     def test_all_trading_pairs_does_not_raise_exception(self, mock_api):
         self.exchange._set_trading_pair_symbol_map(None)
 
-        url = web_utils.public_rest_url(path_url=CONSTANTS.TRADING_PAIRS_EP)
+        url = web_utils.rest_url(path_url=CONSTANTS.TRADING_PAIRS_EP)
 
         self._setup_get(mock_api, url, exception=Exception)
 
@@ -318,22 +348,22 @@ class CoinexExchangeTests(unittest.TestCase):
         self.assertEqual(0, len(result))
 
     #endregion TST_TRADING_PAIRS
-    
+
     #region TST_TRADING_FEE
 
     @aioresponses()
     def test_get_fee_returns_fee_from_exchange_if_available_and_default_if_not(self, mocked_api):
-        self.exchange._set_current_timestamp(TEST_TS_SEC)
-        
-        url = web_utils.public_rest_url(CONSTANTS.ACCOUNT_TRADE_FEE_EP)
+        self.exchange._set_current_timestamp(TEST_TIMESTAMP_SEC)
+
+        url = web_utils.rest_url(CONSTANTS.ACCOUNT_TRADE_FEE_EP)
         resp = {
             "code": 0,
+            "message": "OK",
             "data": {
-                "market": f"{TEST_BASE}{TEST_QUOTE}",
+                "market": self.ex_trading_pair,
                 "maker_rate": "0.003",
                 "taker_rate": "0.002"
             },
-            "message": "OK"
         }
 
         self._setup_get(mocked_api, url, response=resp)
@@ -362,18 +392,57 @@ class CoinexExchangeTests(unittest.TestCase):
 
         self.assertEqual(Decimal("0.2"), fee.percent)  # default fee
 
+    @aioresponses()
+    def test_update_trading_fees_with_valid_pairs(self, mock_api):
+        """
+        Test that trading fees are updated correctly for valid pair,
+        and invalid pairs are ignored in the trading pair map.
+        """
+        self._simulate_trading_rules_initialized()
+        self._simulate_trading_fees_initialized()
+
+        # Validate initial state
+        initial_taker_fee = Decimal("0.0002")
+        initial_maker_fee = Decimal("0.0001")
+        self.assertEqual(initial_maker_fee, Decimal(self.exchange._trading_fees[self.trading_pair]["maker_rate"]))
+        self.assertEqual(initial_taker_fee, Decimal(self.exchange._trading_fees[self.trading_pair]["taker_rate"]))
+
+        # Mock API response
+        url = web_utils.rest_url(CONSTANTS.ACCOUNT_TRADE_FEE_EP)
+        response = {
+            "retCode": 0,
+            "message": "OK",
+            "data": {
+                "market": self.ex_trading_pair,
+                "taker_rate": "0.0006",
+                "maker_rate": "0.0005",
+            },
+        }
+        self._setup_get(mock_api, url, response=response)
+
+        # Execute method under test
+        self.async_run_with_timeout(self.exchange._update_trading_fees())
+
+        # Validate updated state
+        updated_maker_fee = Decimal("0.0005")
+        updated_taker_fee = Decimal("0.0006")
+        self.assertEqual(updated_maker_fee, Decimal(self.exchange._trading_fees[self.trading_pair]["maker_rate"]))
+        self.assertEqual(updated_taker_fee, Decimal(self.exchange._trading_fees[self.trading_pair]["taker_rate"]))
+        self.assertNotIn("INVALIDPAIR", self.exchange._trading_pairs)
+
     #endregion TST_TRADING_FEE
-    
+
     #region TST_BALANCE
 
     @aioresponses()
     def test_update_balances(self, mock_api):
-        self.exchange._set_current_timestamp(TEST_TS_SEC)
+        self.exchange._set_current_timestamp(TEST_TIMESTAMP_SEC)
 
-        url = web_utils.private_rest_url(CONSTANTS.GET_BALANCE_PATH_URL)
-        
+        url = web_utils.rest_url(CONSTANTS.GET_BALANCE_PATH_URL)
+
         response = {
             "code": 0,
+            "message": "OK",
             "data": [
                 {
                     "ccy": "BTC",
@@ -386,10 +455,9 @@ class CoinexExchangeTests(unittest.TestCase):
                     "frozen": "0"
                 }
             ],
-            "message": "OK",
         }
 
-        self._setup_get(mock_api, url, response)
+        self._setup_get(mock_api, url, response=response)
         
         self.async_run_with_timeout(self.exchange._update_balances())
 
@@ -403,15 +471,17 @@ class CoinexExchangeTests(unittest.TestCase):
 
         response = {
             "code": 0,
+            "message": "OK",
             "data": [
                 {
                     "ccy": "BTC",
                     "available": "10.0",
                     "frozen": "5.0"
-                }]
+                }
+            ]
         }
 
-        self._setup_get(mock_api, url, response)
+        self._setup_get(mock_api, url, response=response)
         
         self.async_run_with_timeout(self.exchange._update_balances())
 
@@ -426,6 +496,7 @@ class CoinexExchangeTests(unittest.TestCase):
     #endregion TST_BALANCE
 
     #region TST_ORDERS
+
     def test_supported_order_types(self):
         supported_types = self.exchange.supported_order_types()
         self.assertIn(OrderType.MARKET, supported_types)
@@ -433,7 +504,333 @@ class CoinexExchangeTests(unittest.TestCase):
         self.assertIn(OrderType.LIMIT_MAKER, supported_types)
 
     @aioresponses()
+    def test_cancel_order_raises_failure_event_when_request_fails(self, mock_api):
+        test_order_id=40233
+        test_client_id="OID1"
+
+        request_sent_event = asyncio.Event()
+        self.exchange._set_current_timestamp(TEST_TIMESTAMP_SEC)
+
+        self.exchange.start_tracking_order(
+            order_id=test_client_id,
+            exchange_order_id=test_order_id,
+            trading_pair=self.trading_pair,
+            trade_type=TradeType.BUY,
+            price=Decimal("10000"),
+            amount=Decimal("100"),
+            order_type=OrderType.LIMIT,
+        )
+
+        self.assertIn(test_client_id, self.exchange.in_flight_orders)
+        order = self.exchange.in_flight_orders[test_client_id]
+
+        url = web_utils.rest_url(CONSTANTS.ORDERS_PENDING_EP)
+
+        self._setup_post(mock_api, url, status=400, callback=lambda *args, **kwargs: request_sent_event.set())
+
+        request_sent_event.set()
+
+        self.exchange.cancel(trading_pair=self.trading_pair, client_order_id=test_client_id)
+        self.async_run_with_timeout(request_sent_event.wait())
+
+        self.assertEqual(0, len(self.order_cancelled_logger.event_log))
+
+        self.assertTrue(
+            self._is_logged("ERROR", f"Failed to cancel order {order.client_order_id}")
+        )
+
+    @aioresponses()
+    def test_cancel_order_successfully(self, mock_api):
+        test_order_id=40234
+        test_client_id="OID2"
+
+        request_sent_event = asyncio.Event()
+        self.exchange._set_current_timestamp(TEST_TIMESTAMP_SEC)
+
+        self.exchange.start_tracking_order(
+            order_id=test_client_id,
+            exchange_order_id=test_order_id,
+            trading_pair=self.trading_pair,
+            trade_type=TradeType.BUY,
+            price=Decimal("10000"),
+            amount=Decimal("100"),
+            order_type=OrderType.LIMIT,
+        )
+
+        self.assertIn(test_client_id, self.exchange.in_flight_orders)
+        order = self.exchange.in_flight_orders[test_client_id]
+
+        url = web_utils.rest_url(CONSTANTS.ORDERS_CANCEL_EP)
+        response = {
+            "code": 0,
+            "message": "OK",
+            "data": {
+                "market": f"{self.ex_trading_pair}",
+                "market_type": "SPOT",
+                "order_id": test_order_id,
+                "client_id": f"{test_client_id}",
+            },
+        }
+        self._setup_post(mock_api, url, response=response, callback=lambda *args, **kwargs: request_sent_event.set())
+
+        self.exchange.cancel(trading_pair=self.trading_pair, client_order_id=test_client_id)
+        self.async_run_with_timeout(request_sent_event.wait())
+
+        cancel_request = next(((key, value) for key, value in mock_api.requests.items()
+                               if key[1].human_repr().startswith(url)))
+        self._validate_auth_credentials_present(cancel_request[1][0])
+        request_params = cancel_request[1][0].kwargs["params"]
+        self.assertIsNone(request_params)
+
+        cancel_event: OrderCancelledEvent = self.order_cancelled_logger.event_log[0]
+        self.assertEqual(self.exchange.current_timestamp, cancel_event.timestamp)
+        self.assertEqual(order.client_order_id, cancel_event.order_id)
+
+        self.assertTrue(
+            self._is_logged("INFO", f"Successfully canceled order {order.client_order_id}.")
+        )
+
+    def test_cancel_order_fail_on_retries_exchange_order_id(self):
+        test_client_id="OID3"
+        update_event = MagicMock()
+        update_event.wait.side_effect = asyncio.TimeoutError
+
+        self.exchange._set_current_timestamp(TEST_TIMESTAMP_SEC)
+
+        self.exchange.start_tracking_order(
+            order_id=test_client_id,
+            exchange_order_id=None,
+            trading_pair=self.trading_pair,
+            trade_type=TradeType.BUY,
+            price=Decimal("10000"),
+            amount=Decimal("100"),
+            order_type=OrderType.LIMIT,
+        )
+
+        self.assertIn(test_client_id, self.exchange.in_flight_orders)
+        order = self.exchange.in_flight_orders[test_client_id]
+        order.exchange_order_id_update_event = update_event
+
+        self.async_run_with_timeout(self.exchange._execute_cancel(
+            trading_pair=order.trading_pair,
+            order_id=order.client_order_id,
+        ))
+
+        self.assertEqual(0, len(self.order_cancelled_logger.event_log))
+
+        self.assertTrue(
+            self._is_logged("WARNING", f"Failed to cancel the order {order.client_order_id} because it does not have an exchange order id yet")
+        )
+
+        # After the fourth time not finding the exchange order id the order should be marked as failed
+        for i in range(self.exchange._order_tracker._lost_order_count_limit + 1):
+            self.async_run_with_timeout(self.exchange._execute_cancel(
+                trading_pair=order.trading_pair,
+                order_id=order.client_order_id,
+            ))
+
+        self.assertTrue(order.is_failure)
+
+        failure_event: MarketOrderFailureEvent = self.order_failure_logger.event_log[0]
+        self.assertEqual(self.exchange.current_timestamp, failure_event.timestamp)
+        self.assertEqual(order.client_order_id, failure_event.order_id)
+        self.assertEqual(order.order_type, failure_event.order_type)
+
+    @aioresponses()
+    def test_cancel_orders_with_cancel_all(self, mock_api):
+        test_order_id=40236
+        test_client_id="OID4"
+        self.exchange._set_current_timestamp(TEST_TIMESTAMP_SEC)
+
+        self.exchange.start_tracking_order(
+            order_id=test_client_id,
+            exchange_order_id=test_order_id,
+            trading_pair=self.trading_pair,
+            trade_type=TradeType.BUY,
+            price=Decimal("10000"),
+            amount=Decimal("100"),
+            order_type=OrderType.LIMIT,
+        )
+
+        self.assertIn(test_client_id, self.exchange.in_flight_orders)
+        order = self.exchange.in_flight_orders[test_client_id]
+
+        url = web_utils.rest_url(CONSTANTS.ORDERS_CANCEL_EP)
+        response = {
+            "code": 0,
+            "message": "OK",
+            "data": {
+                "order_id": test_client_id,
+                "client_id": f"{test_client_id}"
+            },
+        }
+        self._setup_post(mock_api, url, response=response)
+
+        cancellation_results = self.async_run_with_timeout(self.exchange.cancel_all(10))
+
+        self.assertEqual(1, len(cancellation_results))
+
+        self.assertEqual(1, len(self.order_cancelled_logger.event_log))
+        cancel_event: OrderCancelledEvent = self.order_cancelled_logger.event_log[0]
+        self.assertEqual(self.exchange.current_timestamp, cancel_event.timestamp)
+        self.assertEqual(order.client_order_id, cancel_event.order_id)
+
+        self.assertTrue(
+            self._is_logged("INFO", f"Successfully canceled order {order.client_order_id}.")
+        )
+
+    @aioresponses()
     def test_create_limit_order_successfully(self, mock_api):
+        test_order_id=40323
+        test_client_id="OID6"
+
         self._simulate_trading_rules_initialized()
+        request_sent_event = asyncio.Event()
+        self.exchange._set_current_timestamp(TEST_TIMESTAMP_SEC)
+
+        url = web_utils.private_rest_url(CONSTANTS.ORDER_CREATE_EP)
+        creation_response = {
+            "code": 0,
+            "message": "OK",
+            "data": {
+                "order_id": test_order_id,
+                "client_id": f"{test_client_id}",
+            }}
+        self._setup_post(mock_api, url,
+                         response=creation_response,
+                         callback=lambda *args, **kwargs: request_sent_event.set())
+
+        self.test_task = asyncio.get_event_loop().create_task(
+            self.exchange._create_order(trade_type=TradeType.BUY,
+                                        order_id=f"{test_client_id}",
+                                        trading_pair=self.trading_pair,
+                                        amount=Decimal("100"),
+                                        order_type=OrderType.LIMIT,
+                                        price=Decimal("10000")))
+        self.async_run_with_timeout(request_sent_event.wait())
+
+        order_request = next(((key, value) for key, value in mock_api.requests.items()
+                              if key[1].human_repr().startswith(url)))
+        self._validate_auth_credentials_present(order_request[1][0])
+        request_data = json.loads(order_request[1][0].kwargs["data"])
+        self.assertEqual(self.ex_trading_pair, request_data["market"])
+        self.assertEqual(TradeType.BUY.name.lower(), request_data["side"])
+        self.assertEqual("limit", request_data["type"])
+        self.assertEqual(Decimal("100"), Decimal(request_data["amount"]))
+        self.assertEqual(Decimal("10000"), Decimal(request_data["price"]))
+        self.assertEqual(test_client_id, request_data["client_id"])
+
+        self.assertIn(test_client_id, self.exchange.in_flight_orders)
+        create_event: BuyOrderCreatedEvent = self.buy_order_created_logger.event_log[0]
+        self.assertEqual(self.exchange.current_timestamp, create_event.timestamp)
+        self.assertEqual(self.trading_pair, create_event.trading_pair)
+        self.assertEqual(OrderType.LIMIT, create_event.type)
+        self.assertEqual(Decimal("100"), create_event.amount)
+        self.assertEqual(Decimal("10000"), create_event.price)
+        self.assertEqual(test_client_id, create_event.order_id)
+        self.assertEqual(str(creation_response["data"]["order_id"]), create_event.exchange_order_id)
+
+        self.assertTrue(
+            self._is_logged(
+                "INFO",
+                f"Created LIMIT BUY order {test_client_id} "
+                f"for {Decimal('100.000000')} {self.trading_pair} "
+                f"at {Decimal('10000.0000')}."
+            )
+        )
+
+    @aioresponses()
+    def test_create_post_only_order_successfully(self, mock_api):
+        test_order_id=40324
+        test_client_id="OID7"
+
+        self._simulate_trading_rules_initialized()
+        request_sent_event = asyncio.Event()
+        self.exchange._set_current_timestamp(TEST_TIMESTAMP_SEC)
+        
+        url = web_utils.private_rest_url(CONSTANTS.ORDER_CREATE_EP)
+        creation_response = {
+            "code": 0,
+            "message": "OK",
+            "data": {
+                "order_id": test_order_id,
+                "client_id": f"{test_client_id}",
+            }}
+        self._setup_post(mock_api, url,
+                         response=creation_response,
+                         callback=lambda *args, **kwargs: request_sent_event.set())
+
+        self.test_task = asyncio.get_event_loop().create_task(
+            self.exchange._create_order(trade_type=TradeType.BUY,
+                                        order_id=test_client_id,
+                                        trading_pair=self.trading_pair,
+                                        amount=Decimal("100"),
+                                        order_type=OrderType.LIMIT_MAKER,
+                                        price=Decimal("10000")))
+        self.async_run_with_timeout(request_sent_event.wait())
+
+        order_request = next(((key, value) for key, value in mock_api.requests.items()
+                              if key[1].human_repr().startswith(url)))
+        self._validate_auth_credentials_present(order_request[1][0])
+        request_data = json.loads(order_request[1][0].kwargs["data"])
+        self.assertEqual(self.ex_trading_pair, request_data["market"])
+        self.assertEqual(TradeType.BUY.name.lower(), request_data["side"])
+        self.assertEqual("maker_only", request_data["type"])
+        self.assertEqual(Decimal("100"), Decimal(request_data["amount"]))
+        self.assertEqual(Decimal("10000"), Decimal(request_data["price"]))
+        self.assertEqual(test_client_id, request_data["client_id"])
+
+        self.assertIn(test_client_id, self.exchange.in_flight_orders)
+        create_event: BuyOrderCreatedEvent = self.buy_order_created_logger.event_log[0]
+        self.assertEqual(self.exchange.current_timestamp, create_event.timestamp)
+        self.assertEqual(self.trading_pair, create_event.trading_pair)
+        self.assertEqual(OrderType.LIMIT_MAKER, create_event.type)
+        self.assertEqual(Decimal("100"), create_event.amount)
+        self.assertEqual(Decimal("10000"), create_event.price)
+        self.assertEqual(test_client_id, create_event.order_id)
+        self.assertEqual(str(creation_response["data"]["order_id"]), create_event.exchange_order_id)
+
+        self.assertTrue(
+            self._is_logged(
+                "INFO",
+                f"Created LIMIT_MAKER BUY order {test_client_id} "
+                f"for {Decimal('100.000000')} {self.trading_pair} "
+                f"at {Decimal('10000.0000')}."
+            )
+        )
+
+    @aioresponses()
+    @patch("hummingbot.connector.exchange.coinex.coinex_exchange.CoinexExchange.get_price")
+    def test_create_order_with_wrong_params_raises_io_error(self, mock_api, get_price_mock):
+        test_order_id = "C1"
+        self.exchange._set_current_timestamp(TEST_TIMESTAMP_SEC)
+
+        get_price_mock.return_value = Decimal(1000)
+        self._simulate_trading_rules_initialized()
+        request_sent_event = asyncio.Event()
+
+        url = web_utils.private_rest_url(CONSTANTS.ORDER_CREATE_EP)
+        creation_response = {
+            "code": 3127,
+            "message": "The quantity is invalid.",
+        }
+
+        self._setup_post(mock_api, url,
+                         response=creation_response,
+                         callback=lambda *args, **kwargs: request_sent_event.set())
+
+        self._simulate_trading_rules_initialized()
+
+        with self.assertRaises(IOError):
+            asyncio.get_event_loop().run_until_complete(
+                self.exchange._place_order(
+                    trade_type=TradeType.BUY,
+                    order_id=test_order_id,
+                    trading_pair=self.trading_pair,
+                    amount=Decimal("0"),
+                    order_type=OrderType.LIMIT,
+                    price=Decimal("46000"),
+                ),
+            )
 
     #endregion TST_ORDERS

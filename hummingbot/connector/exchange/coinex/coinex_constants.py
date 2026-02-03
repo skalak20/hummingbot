@@ -22,6 +22,13 @@ ACCOUNT_INFO_EP = "/v2/account/info"
 ACCOUNT_TRADE_FEE_EP = "/v2/account/trade-fee-rate"
 GET_BALANCE_PATH_URL = "/v2/assets/spot/balance"
 
+ORDER_CREATE_EP = "/v2/spot/order"
+ORDERS_PENDING_EP = "/v2/spot/pending-order"
+ORDERS_CANCEL_ALL_EP = "/v2/spot/cancel-all-order"
+ORDERS_CANCEL_EP = "/v2/spot/cancel-order"
+ORDERS_CANCEL_BY_CLIENTID_EP = "/v2/spot/cancel-order-by-client-id"
+ORDERS_CANCEL_BATCH_EP = "/v2/spot/cancel-batch-order"
+
 # WSS endpoints
 WSS_SPOT_URL = "wss://socket.coinex.com/v2/spot"
 WSS_FUTURES_URL = "wss://socket.coinex.com/v2/futures"
@@ -44,17 +51,20 @@ RATE_LIMITS = [
     RateLimit(limit_id=ACCOUNT_TRADE_FEE_EP, limit=10, time_interval=ONE_SECOND),
     RateLimit(limit_id=GET_BALANCE_PATH_URL, limit=10, time_interval=ONE_SECOND),
 
-    RateLimit(limit_id=CREATE_ORDER, limit=500, time_interval=TEN_SECONDS),
-    RateLimit(limit_id=CANCEL_ORDER, limit=500, time_interval=TEN_SECONDS),
-    RateLimit(limit_id=OTHER_REQUESTS, limit=200, time_interval=TEN_SECONDS),
+    RateLimit(limit_id=ORDER_CREATE_EP, limit=30, time_interval=ONE_SECOND),
+    # RateLimit(limit_id=CREATE_ORDER, limit=500, time_interval=TEN_SECONDS),
+    # RateLimit(limit_id=CANCEL_ORDER, limit=500, time_interval=TEN_SECONDS),
+    # RateLimit(limit_id=OTHER_REQUESTS, limit=200, time_interval=TEN_SECONDS),
     # RateLimit(limit_id=ORDER_TEST_EP, limit=200, time_interval=TEN_SECONDS),
-    # RateLimit(limit_id=ORDER_CREATE_EP, limit=200, time_interval=TEN_SECONDS),
     # RateLimit(limit_id=ORDER_CREATE_BATCH_EP, limit=200, time_interval=TEN_SECONDS),
-    # RateLimit(limit_id=ORDER_CANCEL_EP, limit=200, time_interval=TEN_SECONDS),
     # RateLimit(limit_id=ORDER_CANCEL_BY_SYMBOL_EP, limit=200, time_interval=TEN_SECONDS),
     # RateLimit(limit_id=ORDER_CHECK_EP, limit=200, time_interval=TEN_SECONDS),
     # RateLimit(limit_id=ORDER_OPEN_EP, limit=200, time_interval=TEN_SECONDS),
-    # RateLimit(limit_id=ALL_ORDERS_EP, limit=200, time_interval=TEN_SECONDS),
+    RateLimit(limit_id=ORDERS_PENDING_EP, limit=50, time_interval=ONE_SECOND),
+    RateLimit(limit_id=ORDERS_CANCEL_ALL_EP, limit=40, time_interval=ONE_SECOND),
+    RateLimit(limit_id=ORDERS_CANCEL_EP, limit=60, time_interval=ONE_SECOND),
+    RateLimit(limit_id=ORDERS_CANCEL_BY_CLIENTID_EP, limit=40, time_interval=ONE_SECOND),
+    RateLimit(limit_id=ORDERS_CANCEL_BATCH_EP, limit=60, time_interval=ONE_SECOND),
     # RateLimit(limit_id=ALL_TRADES_EP, limit=200, time_interval=TEN_SECONDS),
 ]
 

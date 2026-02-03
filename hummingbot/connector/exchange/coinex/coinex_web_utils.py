@@ -10,6 +10,17 @@ from hummingbot.core.web_assistant.connections.data_types import RESTMethod
 from hummingbot.core.web_assistant.web_assistants_factory import WebAssistantsFactory
 
 
+def rest_url(path_url: str, domain: str = CONSTANTS.DEF_DOMAIN) -> str:
+    """
+    Creates a URL for provided REST endpoint
+
+    :param path_url: a REST endpoint
+    :param domain: the domain to connect to ("main" or "testnet"). The default value is "main"
+    :return: the full URL to the endpoint
+    """
+    return CONSTANTS.BASE_PATH_URL[domain] + path_url
+
+
 def public_rest_url(path_url: str, domain: str = CONSTANTS.DEF_DOMAIN) -> str:
     """
     Creates a full URL for provided public REST endpoint
@@ -18,7 +29,7 @@ def public_rest_url(path_url: str, domain: str = CONSTANTS.DEF_DOMAIN) -> str:
     :param domain: the domain to connect to ("main" or "testnet"). The default value is "main"
     :return: the full URL to the endpoint
     """
-    return CONSTANTS.BASE_PATH_URL[domain] + path_url  # + CONSTANTS.PUBLIC_API_VERSION
+    return rest_url(path_url, domain)  # + CONSTANTS.PUBLIC_API_VERSION
 
 
 def private_rest_url(path_url: str, domain: str = CONSTANTS.DEF_DOMAIN) -> str:
@@ -30,7 +41,7 @@ def private_rest_url(path_url: str, domain: str = CONSTANTS.DEF_DOMAIN) -> str:
 
     :return: the full URL to the endpoint
     """
-    return CONSTANTS.BASE_PATH_URL[domain] + path_url  # + CONSTANTS.PRIVATE_API_VERSION
+    return rest_url(path_url, domain)  # + CONSTANTS.PRIVATE_API_VERSION
 
 
 def build_api_factory(
