@@ -283,4 +283,4 @@ class TestCoinexAPIOrderBookDataSource(IsolatedAsyncioWrapperTestCase):
 
         msg: OrderBookMessage = await msg_queue.get()
 
-        self.assertEqual(int(diff_event["d"]["r"]), msg.update_id)
+        self.assertEqual(diff_event["data"]["depth"]["checksum"], msg.update_id)

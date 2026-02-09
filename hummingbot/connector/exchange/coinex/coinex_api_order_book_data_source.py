@@ -34,21 +34,9 @@ class CoinexAPIOrderBookDataSource(OrderBookTrackerDataSource):
 
     async def _order_book_snapshot(self, trading_pair: str) -> OrderBookMessage:
         snapshot_response: Dict[str, Any] = await self._request_order_book_snapshot(trading_pair)
-        clean: bool = snapshot_response["data"]['is_full']
-        depth_data = snapshot_response["data"]["depth"]
-        checksum = depth_data["checksum"]
-        snapshot_timestamp = depth_data["updated_at"] * 1e-3
+        data_message = snapshot_response["data"]
 
-        order_book_message_content = {
-            "trading_pair": trading_pair,
-            "update_id": checksum,
-            "bids": depth_data["bids"],
-            "asks": depth_data["asks"]
-        }
-        snapshot_msg: OrderBookMessage = OrderBookMessage(
-            OrderBookMessageType.SNAPSHOT if clean else OrderBookMessageType.DIFF,
-            order_book_message_content,
-            snapshot_timestamp)
+        snapshot_msg = await self._parse_order_book_message(trading_pair, data_message)
 
         return snapshot_msg
 
@@ -128,11 +116,29 @@ class CoinexAPIOrderBookDataSource(OrderBookTrackerDataSource):
                 message_queue.put_nowait(trade_message)
 
     async def _parse_order_book_diff_message(self, raw_message: Dict[str, Any], message_queue: asyncio.Queue):
-        if "code" not in raw_message and CONSTANTS.WSEVT_METHOD_DEPTH_UPDATE == raw_message.get("method", None):
-            data_message = raw_message["data"]
-            trading_pair = await self._connector.trading_pair_associated_to_exchange_symbol(symbol=data_message["market"])
-            for depth_data in data_message['depth']:
-                order_book_message = {
+        data_method = raw_message.get("method", None)
+        data_message = raw_message["data"]
 
-                }
-                message_queue.put_nowait(order_book_message)
+        if "code" not in raw_message and CONSTANTS.WSEVT_METHOD_DEPTH_UPDATE == data_method:
+            trading_pair = await self._connector.trading_pair_associated_to_exchange_symbol(symbol=data_message["market"])
+            order_book_message = await self._parse_order_book_message(trading_pair, data_message)
+            message_queue.put_nowait(order_book_message)
+
+    async def _parse_order_book_message(self, trading_pair: str, data_message: Dict[str, Any]) -> OrderBookMessage:
+        clean: bool = data_message['is_full']
+        depth_data = data_message["depth"]
+        checksum = depth_data["checksum"]
+        snapshot_timestamp = depth_data["updated_at"] * 1e-3
+
+        order_book_message_content = {
+            "trading_pair": trading_pair,
+            "update_id": checksum,
+            "bids": depth_data["bids"],
+            "asks": depth_data["asks"]
+        }
+        order_book_message: OrderBookMessage = OrderBookMessage(
+            OrderBookMessageType.SNAPSHOT if clean else OrderBookMessageType.DIFF,
+            order_book_message_content,
+            snapshot_timestamp)
+
+        return order_book_message
