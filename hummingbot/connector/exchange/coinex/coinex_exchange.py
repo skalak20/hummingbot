@@ -11,12 +11,12 @@ from hummingbot.connector.exchange.coinex import (
     coinex_utils as utils,
     coinex_web_utils as web_utils,
 )
-from hummingbot.connector.utils import combine_to_hb_trading_pair
 from hummingbot.connector.exchange.coinex.coinex_api_order_book_data_source import CoinexAPIOrderBookDataSource
 from hummingbot.connector.exchange.coinex.coinex_api_user_stream_data_source import CoinexAPIUserStreamDataSource
 from hummingbot.connector.exchange.coinex.coinex_auth import CoinexAuth
 from hummingbot.connector.exchange_py_base import ExchangePyBase
 from hummingbot.connector.trading_rule import TradingRule
+from hummingbot.connector.utils import combine_to_hb_trading_pair
 from hummingbot.core.api_throttler.data_types import RateLimit
 from hummingbot.core.data_type.common import OrderType, TradeType
 from hummingbot.core.data_type.in_flight_order import InFlightOrder, OrderUpdate, TradeUpdate
@@ -344,8 +344,38 @@ class CoinexExchange(ExchangePyBase):
             trading_pair = await self.trading_pair_associated_to_exchange_symbol(symbol=fee_json["market"])
             self._trading_fees[trading_pair] = fee_json
 
-    def _user_stream_event_listener(self):
-        raise NotImplementedError
+    async def _user_stream_event_listener(self):
+        """
+        This functions runs in background continuously processing the events received from the exchange by the user
+        stream data source. It keeps reading events from the queue until the task is interrupted.
+        The events received are balance updates, order updates and trade events.
+        """
+        async for event_message in self._iter_user_event_queue():
+            try:
+                method_name = event_message.get("method")
+                execution_data = event_message.get("data")
+
+                if method_name == CONSTANTS.WSEVT_METHOD_ORDER_UPDATE:
+                    order_event = execution_data["event"]
+                    order_data = execution_data["order"]
+                    client_order_id: Optional[str] = order_data.get("client_id")
+                    event_timestamp_sec = order_data["updated_at"] * 1e-3
+
+                if method_name == CONSTANTS.WSEVT_METHOD_BALANCE_UPDATE:
+                    balance_list = list(execution_data.get("balance_list", []))
+                    for balance in balance_list:
+                        currency = balance["ccy"]
+                        available_balance = Decimal(balance["available"])
+                        frozen_balance = Decimal(balance["frozen"])
+                        total_balance = available_balance + frozen_balance
+                        self._account_balances.update({currency: total_balance})
+                        self._account_available_balances.update({currency: available_balance})
+
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                self.logger().error("Unexpected error in Coinex user stream listener loop.", exc_info=True)
+                await self._sleep(5.0)
 
     def supported_order_types(self) -> List[OrderType]:
         return [OrderType.LIMIT, OrderType.MARKET, OrderType.LIMIT_MAKER]

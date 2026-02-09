@@ -3,8 +3,8 @@ import json
 import re
 import unittest
 from decimal import Decimal
-from typing import Awaitable, Dict, NamedTuple, Optional, List
-from unittest.mock import MagicMock, patch
+from typing import Awaitable, Dict, List, NamedTuple, Optional
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from aioresponses import aioresponses
 from bidict import bidict
@@ -20,7 +20,6 @@ from hummingbot.core.event.events import BuyOrderCreatedEvent, MarketEvent, Mark
 from hummingbot.core.network_iterator import NetworkStatus
 from hummingbot.core.web_assistant.connections.data_types import RESTMethod
 
-
 TEST_TIMESTAMP_SEC = 1640000003.356
 TEST_KEY = "560CE33AA5E845929981B163ABD2B25F"
 TEST_SECRET = "CB83A671B4F31671138589A7C8805D0C79FEEA9B298A14C7"
@@ -32,7 +31,7 @@ class CoinexExchangeTests(unittest.TestCase):
     # the level is required to receive logs from the data source logger
     level = 0
 
-    #region MANAGING
+    # region MANAGING
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -40,7 +39,7 @@ class CoinexExchangeTests(unittest.TestCase):
         cls.ev_loop = asyncio.get_event_loop()
         # ag
         cls.api_key = TEST_KEY
-        cls.api_secret_key = TEST_SECRET
+        cls.api_secret = TEST_SECRET
         cls.base_asset = TEST_BASE
         cls.quote_asset = TEST_QUOTE
         cls.trading_pair = f"{TEST_BASE}-{TEST_QUOTE}"
@@ -48,7 +47,6 @@ class CoinexExchangeTests(unittest.TestCase):
 
     def setUp(self) -> None:
         super().setUp()
-
         self.log_records = []
         self.test_task: Optional[asyncio.Task] = None
 
@@ -75,7 +73,7 @@ class CoinexExchangeTests(unittest.TestCase):
         return CoinexExchange(
             client_config_map=client_config_map,
             coinex_api_key=self.api_key,
-            coinex_api_secret=self.api_secret_key,
+            coinex_api_secret=self.api_secret,
             trading_pairs=[self.trading_pair]
         )
 
@@ -123,7 +121,8 @@ class CoinexExchangeTests(unittest.TestCase):
         self.log_records.append(record)
 
     def _is_logged(self, log_level: str, message: str) -> bool:
-        return any(record.levelname == log_level and record.getMessage() == message for record in self.log_records)
+        return any(record.levelname == log_level and record.getMessage() == message
+                   for record in self.log_records)
 
     def async_run_with_timeout(self, coroutine: Awaitable, timeout: int = 1):
         ret = self.ev_loop.run_until_complete(asyncio.wait_for(coroutine, timeout))
@@ -178,14 +177,14 @@ class CoinexExchangeTests(unittest.TestCase):
     def _setup_post(self, mock_api, url, status = None, response = None, exception = None, callback = None):
         self._setup_call(mock_api, url, RESTMethod.POST, status, response, exception, callback)
 
-    #endregion MANAGING
+    # endregion MANAGING
 
-    #region TST_CHECK_NETWORK
+    # region TST_CHECK_NETWORK
 
     @aioresponses()
     def test_check_network_success(self, mock_api):
         url = web_utils.rest_url(CONSTANTS.SERVER_PING_EP)
-        resp = { "code": 0, "data": { "result":"pong" }, "message": "OK" }
+        resp = {"code": 0, "data": {"result": "pong"}, "message": "OK"}
         self._setup_get(mock_api, url, response=resp)
 
         ret = self.async_run_with_timeout(coroutine=self.exchange.check_network())
@@ -208,9 +207,9 @@ class CoinexExchangeTests(unittest.TestCase):
 
         self.assertRaises(asyncio.CancelledError, self.async_run_with_timeout, self.exchange.check_network())
 
-    #endregion TESTS_CHECK_NETWORK
-    
-    #region TST_SERVER_TIME
+    # endregion TESTS_CHECK_NETWORK
+
+    # region TST_SERVER_TIME
 
     @aioresponses()
     def test_update_time_synchronizer_failure_is_logged(self, mock_api):
@@ -234,7 +233,7 @@ class CoinexExchangeTests(unittest.TestCase):
         response = {
             "code": 0,
             "message": "OK",
-            "data": { "timestamp": TEST_TIMESTAMP_SEC * 1e3 },
+            "data": {"timestamp": TEST_TIMESTAMP_SEC * 1e3},
         }
 
         self._setup_get(mock_api, url, response=response, callback=lambda *args, **kwargs: request_sent_event.set())
@@ -252,9 +251,9 @@ class CoinexExchangeTests(unittest.TestCase):
             asyncio.CancelledError,
             self.async_run_with_timeout, self.exchange._update_time_synchronizer())
 
-    #endregion TESTS_SERVER_TIME
+    # endregion TESTS_SERVER_TIME
 
-    #region TST_TRADING_PAIRS
+    # region TST_TRADING_PAIRS
 
     @aioresponses()
     def test_update_trading_rules(self, mock_api):
@@ -314,7 +313,7 @@ class CoinexExchangeTests(unittest.TestCase):
                     "trading_name": TEST_BASE,
                     "trading_decimal": 2,
                 },
-                "SOME-PAIR":{
+                "SOME-PAIR": {
                     "name": "SOME-PAIR",
                     "min_amount": "50",
                     "maker_fee_rate": "0.003",
@@ -326,7 +325,7 @@ class CoinexExchangeTests(unittest.TestCase):
                 }
             },
         }
-        
+
         self._setup_get(mock_api, url, response=resp)
 
         ret = self.async_run_with_timeout(coroutine=self.exchange.all_trading_pairs())
@@ -347,9 +346,9 @@ class CoinexExchangeTests(unittest.TestCase):
 
         self.assertEqual(0, len(result))
 
-    #endregion TST_TRADING_PAIRS
+    # endregion TST_TRADING_PAIRS
 
-    #region TST_TRADING_FEE
+    # region TST_TRADING_FEE
 
     @aioresponses()
     def test_get_fee_returns_fee_from_exchange_if_available_and_default_if_not(self, mocked_api):
@@ -430,9 +429,9 @@ class CoinexExchangeTests(unittest.TestCase):
         self.assertEqual(updated_taker_fee, Decimal(self.exchange._trading_fees[self.trading_pair]["taker_rate"]))
         self.assertNotIn("INVALIDPAIR", self.exchange._trading_pairs)
 
-    #endregion TST_TRADING_FEE
+    # endregion TST_TRADING_FEE
 
-    #region TST_BALANCE
+    # region TST_BALANCE
 
     @aioresponses()
     def test_update_balances(self, mock_api):
@@ -458,7 +457,7 @@ class CoinexExchangeTests(unittest.TestCase):
         }
 
         self._setup_get(mock_api, url, response=response)
-        
+
         self.async_run_with_timeout(self.exchange._update_balances())
 
         available_balances = self.exchange.available_balances
@@ -482,7 +481,7 @@ class CoinexExchangeTests(unittest.TestCase):
         }
 
         self._setup_get(mock_api, url, response=response)
-        
+
         self.async_run_with_timeout(self.exchange._update_balances())
 
         available_balances = self.exchange.available_balances
@@ -493,9 +492,39 @@ class CoinexExchangeTests(unittest.TestCase):
         self.assertEqual(Decimal("10"), available_balances["BTC"])
         self.assertEqual(Decimal("15"), total_balances["BTC"])
 
-    #endregion TST_BALANCE
+    def test_user_stream_balance_update(self):
+        test_currency = f"{TEST_BASE}"
+        self.exchange._set_current_timestamp(TEST_TIMESTAMP_SEC)
 
-    #region TST_ORDERS
+        event_message = {
+            "method": "balance.update",
+            "data": {
+                "balance_list": [{
+                    "margin_market": self.ex_trading_pair,
+                    "ccy": test_currency,
+                    "available": "44.622",
+                    "frozen": "10.000",
+                    "updated_at": "1545743136994",
+                }],
+            },
+            "id": None,
+        }
+
+        mock_queue = AsyncMock()
+        mock_queue.get.side_effect = [event_message, asyncio.CancelledError]
+        self.exchange._user_stream_tracker._user_stream = mock_queue
+
+        try:
+            self.async_run_with_timeout(self.exchange._user_stream_event_listener())
+        except asyncio.CancelledError:
+            pass
+
+        self.assertEqual(Decimal("44.622"), self.exchange.available_balances[test_currency])
+        self.assertEqual(Decimal("54.622"), self.exchange.get_balance(test_currency))
+
+    # endregion TST_BALANCE
+
+    # region TST_ORDERS
 
     def test_supported_order_types(self):
         supported_types = self.exchange.supported_order_types()
@@ -505,8 +534,8 @@ class CoinexExchangeTests(unittest.TestCase):
 
     @aioresponses()
     def test_cancel_order_raises_failure_event_when_request_fails(self, mock_api):
-        test_order_id=40233
-        test_client_id="OID1"
+        test_order_id = 40233
+        test_client_id = "OID1"
 
         request_sent_event = asyncio.Event()
         self.exchange._set_current_timestamp(TEST_TIMESTAMP_SEC)
@@ -541,8 +570,8 @@ class CoinexExchangeTests(unittest.TestCase):
 
     @aioresponses()
     def test_cancel_order_successfully(self, mock_api):
-        test_order_id=40234
-        test_client_id="OID2"
+        test_order_id = 40234
+        test_client_id = "OID2"
 
         request_sent_event = asyncio.Event()
         self.exchange._set_current_timestamp(TEST_TIMESTAMP_SEC)
@@ -591,7 +620,7 @@ class CoinexExchangeTests(unittest.TestCase):
         )
 
     def test_cancel_order_fail_on_retries_exchange_order_id(self):
-        test_client_id="OID3"
+        test_client_id = "OID3"
         update_event = MagicMock()
         update_event.wait.side_effect = asyncio.TimeoutError
 
@@ -638,8 +667,8 @@ class CoinexExchangeTests(unittest.TestCase):
 
     @aioresponses()
     def test_cancel_orders_with_cancel_all(self, mock_api):
-        test_order_id=40236
-        test_client_id="OID4"
+        test_order_id = 40236
+        test_client_id = "OID4"
         self.exchange._set_current_timestamp(TEST_TIMESTAMP_SEC)
 
         self.exchange.start_tracking_order(
@@ -681,8 +710,8 @@ class CoinexExchangeTests(unittest.TestCase):
 
     @aioresponses()
     def test_create_limit_order_successfully(self, mock_api):
-        test_order_id=40323
-        test_client_id="OID6"
+        test_order_id = 40323
+        test_client_id = "OID6"
 
         self._simulate_trading_rules_initialized()
         request_sent_event = asyncio.Event()
@@ -741,13 +770,13 @@ class CoinexExchangeTests(unittest.TestCase):
 
     @aioresponses()
     def test_create_post_only_order_successfully(self, mock_api):
-        test_order_id=40324
-        test_client_id="OID7"
+        test_order_id = 40324
+        test_client_id = "OID7"
 
         self._simulate_trading_rules_initialized()
         request_sent_event = asyncio.Event()
         self.exchange._set_current_timestamp(TEST_TIMESTAMP_SEC)
-        
+
         url = web_utils.private_rest_url(CONSTANTS.ORDER_CREATE_EP)
         creation_response = {
             "code": 0,
@@ -833,4 +862,42 @@ class CoinexExchangeTests(unittest.TestCase):
                 ),
             )
 
-    #endregion TST_ORDERS
+    # endregion TST_ORDERS
+
+    # region TST_STREAM
+
+    def test_user_stream_raises_cancel_exception(self):
+        self.exchange._set_current_timestamp(TEST_TIMESTAMP_SEC)
+
+        mock_queue = AsyncMock()
+        mock_queue.get.side_effect = asyncio.CancelledError
+        self.exchange._user_stream_tracker._user_stream = mock_queue
+
+        self.assertRaises(
+            asyncio.CancelledError,
+            self.async_run_with_timeout,
+            self.exchange._user_stream_event_listener())
+
+    @patch("hummingbot.connector.exchange.coinex.coinex_exchange.CoinexExchange._sleep")
+    def test_user_stream_logs_errors(self, sleep_mock):
+        self.exchange._set_current_timestamp(TEST_TIMESTAMP_SEC)
+
+        incomplete_event = {
+            "method": "balance.update",
+            "id": None,
+        }
+
+        mock_queue = AsyncMock()
+        mock_queue.get.side_effect = [incomplete_event, asyncio.CancelledError]
+        self.exchange._user_stream_tracker._user_stream = mock_queue
+
+        try:
+            self.async_run_with_timeout(self.exchange._user_stream_event_listener())
+        except asyncio.CancelledError:
+            pass
+
+        self.assertTrue(
+            self._is_logged("ERROR", "Unexpected error in Coinex user stream listener loop.")
+        )
+
+    # endregion TST_STREAM

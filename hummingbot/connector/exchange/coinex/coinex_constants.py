@@ -22,6 +22,8 @@ ACCOUNT_INFO_EP = "/v2/account/info"
 ACCOUNT_TRADE_FEE_EP = "/v2/account/trade-fee-rate"
 GET_BALANCE_PATH_URL = "/v2/assets/spot/balance"
 
+ORDERBOOK_SNAPSHOT_NO_AUTH_EP = "/v2/spot/depth"
+
 ORDER_CREATE_EP = "/v2/spot/order"
 ORDERS_PENDING_EP = "/v2/spot/pending-order"
 ORDERS_CANCEL_ALL_EP = "/v2/spot/cancel-all-order"
@@ -32,6 +34,15 @@ ORDERS_CANCEL_BATCH_EP = "/v2/spot/cancel-batch-order"
 # WSS endpoints
 WSS_SPOT_URL = "wss://socket.coinex.com/v2/spot"
 WSS_FUTURES_URL = "wss://socket.coinex.com/v2/futures"
+
+WSEVT_METHOD_TRADES_UPDARTE = "deals.update"
+WSEVT_METHOD_BALANCE_UPDATE = "balance.update"
+WSEVT_METHOD_DEPTH_UPDATE = "depth.update"
+WSEVT_METHOD_ORDER_UPDATE = "order.update"
+WSEVT_ORDER_PUT = "put"
+WSEVT_ORDER_UPDATE = "update"
+WSEVT_ORDER_MODIFY = "modify"
+WSEVT_ORDER_FINISH = "finish"
 
 # Rate Limit Type
 CREATE_ORDER = "CREATE_ORDER"
@@ -50,6 +61,7 @@ RATE_LIMITS = [
     RateLimit(limit_id=TRADING_PAIRS_EP, limit=400, time_interval=ONE_SECOND),
     RateLimit(limit_id=ACCOUNT_TRADE_FEE_EP, limit=10, time_interval=ONE_SECOND),
     RateLimit(limit_id=GET_BALANCE_PATH_URL, limit=10, time_interval=ONE_SECOND),
+    RateLimit(limit_id=ORDERBOOK_SNAPSHOT_NO_AUTH_EP, limit=400, time_interval=ONE_SECOND),
 
     RateLimit(limit_id=ORDER_CREATE_EP, limit=30, time_interval=ONE_SECOND),
     # RateLimit(limit_id=CREATE_ORDER, limit=500, time_interval=TEN_SECONDS),
