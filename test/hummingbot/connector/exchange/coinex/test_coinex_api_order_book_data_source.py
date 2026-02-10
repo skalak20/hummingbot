@@ -2,7 +2,7 @@ import asyncio
 import json
 import re
 from test.isolated_asyncio_wrapper_test_case import IsolatedAsyncioWrapperTestCase
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from aioresponses import aioresponses
 from bidict import bidict
@@ -25,6 +25,8 @@ TEST_QUOTE = "USDT"
 class TestCoinexAPIOrderBookDataSource(IsolatedAsyncioWrapperTestCase):
     # logging.Level required to receive logs from the data source logger
     level = 0
+
+    # region TESTS MANAGE
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -77,50 +79,50 @@ class TestCoinexAPIOrderBookDataSource(IsolatedAsyncioWrapperTestCase):
         return any(record.levelname == log_level and record.getMessage() == message
                    for record in self.log_records)
 
-    @classmethod
-    def _get_snapshot_mock(cls):
+    @staticmethod
+    def _get_snapshot_mock():
         snapshot = {
             "code": 0,
             "data": {
-                "market": f"{cls.ex_trading_pair}",
+                "market": f"{TEST_BASE}{TEST_QUOTE}",
                 "is_full": True,
                 "depth": {
                     "asks": [["69417", "0.07235316"], ["69418", "0.17286582"], ["69420", "0.07346604"], ["69421", "1.48370088"], ["69427", "0.7201809"]],
                     "bids": [["69416", "0.19272954"], ["69411", "0.01008485"], ["69410", "0.00144069"], ["69405", "0.02334033"], ["69402", "0.04322641"]],
                     "checksum": 3200617993,
                     "last": "69410",
-                    "updated_at": 1770295371577
+                    "updated_at": TEST_TS,
                 },
             },
             "message": "OK"
         }
         return snapshot
 
-    @classmethod
-    def _order_diff_event(cls):
+    @staticmethod
+    def _order_diff_event():
         depth = {
             "method": "depth.update",
             "data": {
-                "market": f"{cls.ex_trading_pair}",
+                "market": f"{TEST_BASE}{TEST_QUOTE}",
                 "is_full": False,
                 "depth": {
                     "asks": [["69417", "0.07235316"], ["69418", "0.17286582"], ["69420", "0.07346604"], ["69421", "1.48370088"], ["69427", "0.7201809"]],
                     "bids": [["69416", "0.19272954"], ["69411", "0.01008485"], ["69410", "0.00144069"], ["69405", "0.02334033"], ["69402", "0.04322641"]],
                     "checksum": 3200617993,
                     "last": "69410",
-                    "updated_at": 1770295371577
+                    "updated_at": TEST_TS,
                 },
             },
             "id": None
         }
         return depth
 
-    @classmethod
-    def _trade_update_event(cls):
+    @staticmethod
+    def _trade_update_event():
         resp = {
             "method": "deals.update",
             "data": {
-                "market": f"{cls.ex_trading_pair}",
+                "market": f"{TEST_BASE}{TEST_QUOTE}",
                 "deal_list": [{
                     "deal_id": 3514376759,
                     "created_at": TEST_TS,
@@ -145,7 +147,8 @@ class TestCoinexAPIOrderBookDataSource(IsolatedAsyncioWrapperTestCase):
         }
         return resp
 
-    def _setup_get(self, mock_api, url, status = None, response = None, exception = None, callback = None):
+    @staticmethod
+    def _setup_get(mock_api, url, status = None, response = None, exception = None, callback = None):
         regex_url = re.compile(f"^{url}".replace(".", r"\.").replace("?", r"\?"))
 
         if status:
@@ -154,6 +157,8 @@ class TestCoinexAPIOrderBookDataSource(IsolatedAsyncioWrapperTestCase):
             mock_api.get(regex_url, body=json.dumps(response), callback=callback)
         elif exception:
             mock_api.get(regex_url, exception=exception, callback=callback)
+
+    # endregion TESTS MANAGE
 
     @aioresponses()
     async def test_get_new_order_book_successful(self, mock_api):
@@ -199,6 +204,8 @@ class TestCoinexAPIOrderBookDataSource(IsolatedAsyncioWrapperTestCase):
             self._is_logged("ERROR", "Unexpected error occurred subscribing to Coinex order book trading and delta streams...")
         )
 
+    # region TEST_TRADES_LISTENING
+
     async def test_listen_for_trades_cancelled_when_listening(self):
         mock_queue = MagicMock()
         mock_queue.get.side_effect = asyncio.CancelledError()
@@ -242,6 +249,8 @@ class TestCoinexAPIOrderBookDataSource(IsolatedAsyncioWrapperTestCase):
 
         self.assertEqual(3514376759, msg.trade_id)
 
+    # endregion TEST_TRADES_LISTENING
+
     async def test_listen_for_order_book_diffs_cancelled(self):
         mock_queue = MagicMock()
         mock_queue.get.side_effect = asyncio.CancelledError()
@@ -284,3 +293,30 @@ class TestCoinexAPIOrderBookDataSource(IsolatedAsyncioWrapperTestCase):
         msg: OrderBookMessage = await msg_queue.get()
 
         self.assertEqual(diff_event["data"]["depth"]["checksum"], msg.update_id)
+
+    @aioresponses()
+    async def test_listen_for_order_book_snapshots_cancelled_when_fetching_snapshot(self, mock_api):
+        url = web_utils.public_rest_url(path_url=CONSTANTS.ORDERBOOK_SNAPSHOT_NO_AUTH_EP)
+
+        self._setup_get(mock_api, url, exception=asyncio.CancelledError)
+
+        with self.assertRaises(asyncio.CancelledError):
+            await self.data_source.listen_for_order_book_snapshots(self.local_event_loop, asyncio.Queue())
+
+    @aioresponses()
+    @patch("hummingbot.connector.exchange.coinex.coinex_api_order_book_data_source"
+           ".CoinexAPIOrderBookDataSource._sleep")
+    async def test_listen_for_order_book_snapshots_log_exception(self, mock_api, sleep_mock):
+        msg_queue: asyncio.Queue = asyncio.Queue()
+        sleep_mock.side_effect = asyncio.CancelledError
+
+        url = web_utils.public_rest_url(path_url=CONSTANTS.ORDERBOOK_SNAPSHOT_NO_AUTH_EP)
+        self._setup_get(mock_api, url, exception=Exception)
+
+        try:
+            await self.data_source.listen_for_order_book_snapshots(self.local_event_loop, msg_queue)
+        except asyncio.CancelledError:
+            pass
+
+        self.assertTrue(
+            self._is_logged("ERROR", f"Unexpected error fetching order book snapshot for {self.trading_pair}."))

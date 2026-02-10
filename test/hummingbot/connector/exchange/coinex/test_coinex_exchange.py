@@ -31,7 +31,7 @@ class CoinexExchangeTests(unittest.TestCase):
     # the level is required to receive logs from the data source logger
     level = 0
 
-    # region MANAGING
+    # region TESTS MANAGE
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -68,16 +68,18 @@ class CoinexExchangeTests(unittest.TestCase):
         self.test_task and self.test_task.cancel()
         super().tearDown()
 
-    def create_exchange_instance(self):
+    @staticmethod
+    def create_exchange_instance():
         client_config_map = ClientConfigAdapter(ClientConfigMap())
         return CoinexExchange(
             client_config_map=client_config_map,
-            coinex_api_key=self.api_key,
-            coinex_api_secret=self.api_secret,
-            trading_pairs=[self.trading_pair]
+            coinex_api_key=TEST_KEY,
+            coinex_api_secret=TEST_SECRET,
+            trading_pairs=[f"{TEST_BASE}-{TEST_QUOTE}"]
         )
 
-    def get_exchange_rules_mock(self) -> Dict:
+    @staticmethod
+    def get_exchange_rules_mock() -> Dict:
         exchange_rules = {
             "code": 0,
             "data": {

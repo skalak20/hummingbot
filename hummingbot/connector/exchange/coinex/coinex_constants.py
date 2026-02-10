@@ -7,7 +7,12 @@ ORDER_CLIENT_ID_PREFIX = ""
 
 DEF_DOMAIN = "main"
 
+H_TS = "X-COINEX-TIMESTAMP"
+H_KEY = "X-COINEX-KEY"
+H_SIGN = "X-COINEX-SIGN"
+
 # REST endpoints
+
 BASE_PATH_URL = {
     "main": "https://api.coinex.com",
 }
@@ -32,17 +37,40 @@ ORDERS_CANCEL_BY_CLIENTID_EP = "/v2/spot/cancel-order-by-client-id"
 ORDERS_CANCEL_BATCH_EP = "/v2/spot/cancel-batch-order"
 
 # WSS endpoints
+
 WSS_SPOT_URL = "wss://socket.coinex.com/v2/spot"
 WSS_FUTURES_URL = "wss://socket.coinex.com/v2/futures"
 
-WSEVT_METHOD_TRADES_UPDARTE = "deals.update"
-WSEVT_METHOD_BALANCE_UPDATE = "balance.update"
-WSEVT_METHOD_DEPTH_UPDATE = "depth.update"
-WSEVT_METHOD_ORDER_UPDATE = "order.update"
-WSEVT_ORDER_PUT = "put"
-WSEVT_ORDER_UPDATE = "update"
-WSEVT_ORDER_MODIFY = "modify"
-WSEVT_ORDER_FINISH = "finish"
+WS_HEARTBEAT_TIME_INTERVAL = 3
+
+WS_PING_ID = 5
+WS_AUTH_ID = 15
+WS_BALANCE_ID = 20
+WS_ORDERS_ID = 21
+WS_TRADES_ID = 22
+
+WS_METHOD_SERVER_PING = "server.ping"
+WS_METHOD_SERVER_SIGN = "server.sign"
+WS_METHOD_BALANCE_SUBSCRIBE = "balance.subscribe"
+WS_METHOD_BALANCE_UNSUBSCRIBE = "balance.unsubscribe"
+WS_METHOD_ORDER_SUBSCRIBE = "order.subscribe"
+WS_METHOD_ORDER_UNSUBSCRIBE = "order.unsubscribe"
+WS_METHOD_USERDEALS_SUBSCRIBE = "user_deals.subscribe"
+WS_METHOD_USERDEALS_UNSUBSCRIBE = "user_deals.unsubscribe"
+WS_METHOD_DEPTH_SUBSCRIBE = "depth.subscribe"
+WS_METHOD_DEPTH_UNSUBSCRIBE = "depth.unsubscribe"
+WS_METHOD_DEALS_SUBSCRIBE = "deals.subscribe"
+WS_METHOD_DEALS_UNSUBSCRIBE = "deals.unsubscribe"
+
+WS_EVENT_DEALS_UPDARTE = "deals.update"
+WS_EVENT_BALANCE_UPDATE = "balance.update"
+WS_EVENT_DEPTH_UPDATE = "depth.update"
+WS_EVENT_ORDER_UPDATE = "order.update"
+
+WS_TYPE_PUT = "put"
+WS_TYPE_UPDATE = "update"
+WS_TYPE_MODIFY = "modify"
+WS_TYPE_FINISH = "finish"
 
 # Rate Limit Type
 CREATE_ORDER = "CREATE_ORDER"

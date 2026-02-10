@@ -355,13 +355,13 @@ class CoinexExchange(ExchangePyBase):
                 method_name = event_message.get("method")
                 execution_data = event_message.get("data")
 
-                if method_name == CONSTANTS.WSEVT_METHOD_ORDER_UPDATE:
+                if method_name == CONSTANTS.WS_EVENT_ORDER_UPDATE:
                     order_event = execution_data["event"]
                     order_data = execution_data["order"]
                     client_order_id: Optional[str] = order_data.get("client_id")
                     event_timestamp_sec = order_data["updated_at"] * 1e-3
 
-                if method_name == CONSTANTS.WSEVT_METHOD_BALANCE_UPDATE:
+                if method_name == CONSTANTS.WS_EVENT_BALANCE_UPDATE:
                     balance_list = list(execution_data.get("balance_list", []))
                     for balance in balance_list:
                         currency = balance["ccy"]

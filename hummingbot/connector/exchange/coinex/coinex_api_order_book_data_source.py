@@ -26,8 +26,8 @@ class CoinexAPIOrderBookDataSource(OrderBookTrackerDataSource):
         self._last_ws_message_sent_timestamp = 0
         self._ping_interval = 0
 
-        self._trade_messages_queue_key = CONSTANTS.WSEVT_METHOD_TRADES_UPDARTE
-        self._diff_messages_queue_key = CONSTANTS.WSEVT_METHOD_DEPTH_UPDATE
+        self._trade_messages_queue_key = CONSTANTS.WS_EVENT_DEALS_UPDARTE
+        self._diff_messages_queue_key = CONSTANTS.WS_EVENT_DEPTH_UPDATE
 
     async def get_last_traded_prices(self, trading_pairs: List[str], domain: Optional[str] = None) -> Dict[str, float]:
         return await self._connector.get_last_traded_prices(trading_pairs=trading_pairs)
@@ -95,7 +95,7 @@ class CoinexAPIOrderBookDataSource(OrderBookTrackerDataSource):
             raise
 
     async def _parse_trade_message(self, raw_message: Dict[str, Any], message_queue: asyncio.Queue):
-        if "code" not in raw_message and CONSTANTS.WSEVT_METHOD_TRADES_UPDARTE == raw_message.get("method", None):
+        if "code" not in raw_message and CONSTANTS.WS_EVENT_DEALS_UPDARTE == raw_message.get("method", None):
             data_message = raw_message["data"]
             trading_pair = await self._connector.trading_pair_associated_to_exchange_symbol(symbol=data_message["market"])
             for trade_data in data_message['deal_list']:
@@ -119,7 +119,7 @@ class CoinexAPIOrderBookDataSource(OrderBookTrackerDataSource):
         data_method = raw_message.get("method", None)
         data_message = raw_message["data"]
 
-        if "code" not in raw_message and CONSTANTS.WSEVT_METHOD_DEPTH_UPDATE == data_method:
+        if "code" not in raw_message and CONSTANTS.WS_EVENT_DEPTH_UPDATE == data_method:
             trading_pair = await self._connector.trading_pair_associated_to_exchange_symbol(symbol=data_message["market"])
             order_book_message = await self._parse_order_book_message(trading_pair, data_message)
             message_queue.put_nowait(order_book_message)
