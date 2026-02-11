@@ -64,8 +64,9 @@ WS_METHOD_DEALS_UNSUBSCRIBE = "deals.unsubscribe"
 
 WS_EVENT_DEALS_UPDARTE = "deals.update"
 WS_EVENT_BALANCE_UPDATE = "balance.update"
-WS_EVENT_DEPTH_UPDATE = "depth.update"
 WS_EVENT_ORDER_UPDATE = "order.update"
+WS_EVENT_USERDEALS_UPDATE = "user_deals.update"
+WS_EVENT_DEPTH_UPDATE = "depth.update"
 
 WS_TYPE_PUT = "put"
 WS_TYPE_UPDATE = "update"

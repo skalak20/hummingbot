@@ -236,7 +236,8 @@ class CoinexExchange(ExchangePyBase):
         api_params = {
             "market": exchange_symbol,
             "market_type": "SPOT",
-            "order_id": exchange_order_id}
+            "order_id": exchange_order_id,
+        }
 
         cancel_result = await self._api_post(
             path_url=CONSTANTS.ORDERS_CANCEL_EP,
@@ -305,7 +306,6 @@ class CoinexExchange(ExchangePyBase):
 
         balance_response = await self._api_get(
             path_url=CONSTANTS.GET_BALANCE_PATH_URL,
-            # params={"market": "CETUSDT"},
             is_auth_required=True)
 
         if balance_response and balance_response["code"] == 0 and isinstance(balance_response["data"], list) and any(balance_response["data"]):

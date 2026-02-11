@@ -1,8 +1,9 @@
 import asyncio
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, Any, Dict, List
 
 from hummingbot.connector.exchange.coinex import coinex_constants as CONSTANTS
 from hummingbot.connector.exchange.coinex.coinex_auth import CoinexAuth
+from hummingbot.connector.utils import split_hb_trading_pair
 from hummingbot.core.data_type.user_stream_tracker_data_source import UserStreamTrackerDataSource
 from hummingbot.core.web_assistant.connections.data_types import WSJSONRequest
 from hummingbot.core.web_assistant.web_assistants_factory import WebAssistantsFactory
@@ -21,11 +22,12 @@ class CoinexAPIUserStreamDataSource(UserStreamTrackerDataSource):
                  api_factory: WebAssistantsFactory,
                  domain: str = CONSTANTS.DEF_DOMAIN):
         super().__init__()
-        self._auth: CoinexAuth = auth
-        self._domain = domain
+        self._auth = auth
+        self._trading_pairs: List[str] = trading_pairs
+        self._connector = connector
         self._api_factory = api_factory
+        self._domain = domain
         self._last_ws_message_sent_timestamp = 0
-        self._ping_interval = 0
 
     async def _get_ws_assistant(self) -> WSAssistant:
         if self._ws_assistant is None:
@@ -76,25 +78,35 @@ class CoinexAPIUserStreamDataSource(UserStreamTrackerDataSource):
         :param ws: the websocket assistant used to connect to the exchange
         """
         try:
+            symbols = []
+            currencies = []
+
+            for trading_pair in self._trading_pairs:
+                symbols.append(await self._connector.exchange_symbol_associated_to_pair(trading_pair=trading_pair))
+                currencies.extend(split_hb_trading_pair(trading_pair))
+
+            symbols = list(sorted(set(symbols)))
+            currencies = list(sorted(set(currencies)))
+
             subscribe_balance_request = WSJSONRequest(payload = {
                 "id": CONSTANTS.WS_BALANCE_ID,
                 "method": f"{CONSTANTS.WS_METHOD_BALANCE_SUBSCRIBE}",
                 "params": {
-                    "ccy_list": [],  # List of asset names. Emty to all
+                    "ccy_list": currencies,  # List of asset names. Emty to all
                 }})
 
             subscribe_orders_request = WSJSONRequest(payload= {
                 "id": CONSTANTS.WS_ORDERS_ID,
                 "method": f"{CONSTANTS.WS_METHOD_ORDER_SUBSCRIBE}",
                 "params": {
-                    "market_list": [],  # Pairs list. Empty list to subscribe to all.
+                    "market_list": symbols,  # Pairs list. Empty list to subscribe to all.
                 }})
 
             subscribe_executions_request = WSJSONRequest(payload= {
                 "id": CONSTANTS.WS_TRADES_ID,
                 "method": f"{CONSTANTS.WS_METHOD_USERDEALS_SUBSCRIBE}",
                 "params": {
-                    "market_list": [],  # Pairs list. Empty list to subscribe to all.
+                    "market_list": symbols,  # Pairs list. Empty list to subscribe to all.
                 }})
 
             await websocket_assistant.send(subscribe_balance_request)
@@ -110,3 +122,19 @@ class CoinexAPIUserStreamDataSource(UserStreamTrackerDataSource):
                 exc_info=True
             )
             raise
+
+    async def _process_event_message(self, event_message: Dict[str, Any], queue: asyncio.Queue):
+        if event_message.get("code") > 0:
+            err_msg = event_message.get("message", {})
+            raise IOError({
+                "label": "WSS_ERROR",
+                "message": f"Error received via websocket - {err_msg}."
+            })
+        elif event_message.get("method", None) in [
+            CONSTANTS.WS_EVENT_BALANCE_UPDATE,
+            CONSTANTS.WS_EVENT_ORDER_UPDATE,
+            CONSTANTS.WS_EVENT_USERDEALS_UPDATE,
+        ]:
+            queue.put_nowait(event_message)
+        else:
+            pass
