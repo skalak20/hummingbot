@@ -28,7 +28,7 @@ ACCOUNT_TRADE_FEE_EP = "/v2/account/trade-fee-rate"
 GET_BALANCE_PATH_URL = "/v2/assets/spot/balance"
 
 ORDERBOOK_SNAPSHOT_NO_AUTH_EP = "/v2/spot/depth"
-
+MY_TRADES_PATH_URL = "/v2/spot/user-deals"
 ORDER_CREATE_EP = "/v2/spot/order"
 ORDERS_PENDING_EP = "/v2/spot/pending-order"
 ORDERS_CANCEL_ALL_EP = "/v2/spot/cancel-all-order"

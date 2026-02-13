@@ -304,8 +304,7 @@ class TestCoinexAPIOrderBookDataSource(IsolatedAsyncioWrapperTestCase):
             await self.data_source.listen_for_order_book_snapshots(self.local_event_loop, asyncio.Queue())
 
     @aioresponses()
-    @patch("hummingbot.connector.exchange.coinex.coinex_api_order_book_data_source"
-           ".CoinexAPIOrderBookDataSource._sleep")
+    @patch("hummingbot.connector.exchange.coinex.coinex_api_order_book_data_source.CoinexAPIOrderBookDataSource._sleep")
     async def test_listen_for_order_book_snapshots_log_exception(self, mock_api, sleep_mock):
         msg_queue: asyncio.Queue = asyncio.Queue()
         sleep_mock.side_effect = asyncio.CancelledError

@@ -16,7 +16,7 @@ from hummingbot.connector.exchange.coinex.coinex_api_user_stream_data_source imp
 from hummingbot.connector.exchange.coinex.coinex_auth import CoinexAuth
 from hummingbot.connector.exchange_py_base import ExchangePyBase
 from hummingbot.connector.trading_rule import TradingRule
-from hummingbot.connector.utils import combine_to_hb_trading_pair
+from hummingbot.connector.utils import combine_to_hb_trading_pair, split_hb_trading_pair
 from hummingbot.core.api_throttler.data_types import RateLimit
 from hummingbot.core.data_type.common import OrderType, TradeType
 from hummingbot.core.data_type.in_flight_order import InFlightOrder, OrderUpdate, TradeUpdate
@@ -263,17 +263,21 @@ class CoinexExchange(ExchangePyBase):
         side = trade_type.name.lower()
         order_type_str = "market" if order_type == OrderType.MARKET else "limit"
         data = {
+            "market": await self.exchange_symbol_associated_to_pair(trading_pair=trading_pair),
+            "market_type": "SPOT",
+            "side": side,
+            "type": order_type_str,
             "amount": str(amount),
             "client_id": order_id,
-            "side": side,
-            "market": await self.exchange_symbol_associated_to_pair(trading_pair=trading_pair),
-            "type": order_type_str,
         }
         if order_type is OrderType.LIMIT:
             data["price"] = str(price)
         elif order_type is OrderType.LIMIT_MAKER:
             data["price"] = str(price)
             data["type"] = "maker_only"
+        elif order_type is OrderType.MARKET:
+            [base, quote] = split_hb_trading_pair(trading_pair)
+            data["ccy"] = base
         exchange_order_response = await self._api_post(
             path_url=CONSTANTS.ORDER_CREATE_EP,
             data=data,
@@ -338,11 +342,15 @@ class CoinexExchange(ExchangePyBase):
                 params=params,
                 is_auth_required=True,
             )
-            fees_json.append(resp["data"])
+            if resp['code'] == 0:
+                fees_json.append(resp["data"])
 
         for fee_json in fees_json:
             trading_pair = await self.trading_pair_associated_to_exchange_symbol(symbol=fee_json["market"])
             self._trading_fees[trading_pair] = fee_json
+
+    async def _update_order_fills_from_trades(self):
+        raise NotImplementedError
 
     async def _user_stream_event_listener(self):
         """
