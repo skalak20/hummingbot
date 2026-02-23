@@ -35,6 +35,7 @@ ORDERS_CANCEL_ALL_EP = "/v2/spot/cancel-all-order"
 ORDERS_CANCEL_EP = "/v2/spot/cancel-order"
 ORDERS_CANCEL_BY_CLIENTID_EP = "/v2/spot/cancel-order-by-client-id"
 ORDERS_CANCEL_BATCH_EP = "/v2/spot/cancel-batch-order"
+ORDERS_CANCEL_BATCH_MAX = 100
 
 # WSS endpoints
 
@@ -105,7 +106,7 @@ RATE_LIMITS = [
     RateLimit(limit_id=ORDERS_CANCEL_ALL_EP, limit=40, time_interval=ONE_SECOND),
     RateLimit(limit_id=ORDERS_CANCEL_EP, limit=60, time_interval=ONE_SECOND),
     RateLimit(limit_id=ORDERS_CANCEL_BY_CLIENTID_EP, limit=40, time_interval=ONE_SECOND),
-    RateLimit(limit_id=ORDERS_CANCEL_BATCH_EP, limit=60, time_interval=ONE_SECOND),
+    RateLimit(limit_id=ORDERS_CANCEL_BATCH_EP, limit=40, time_interval=ONE_SECOND),
     # RateLimit(limit_id=ALL_TRADES_EP, limit=200, time_interval=TEN_SECONDS),
 ]
 

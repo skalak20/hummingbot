@@ -15,8 +15,9 @@ from hummingbot.connector.exchange.coinex import coinex_constants as CONSTANTS, 
 from hummingbot.connector.exchange.coinex.coinex_exchange import CoinexExchange
 from hummingbot.connector.trading_rule import TradingRule
 from hummingbot.connector.utils import get_new_client_order_id
+from hummingbot.core.data_type.cancellation_result import CancellationResult
 from hummingbot.core.data_type.common import OrderType, TradeType
-from hummingbot.core.data_type.in_flight_order import OrderState
+from hummingbot.core.data_type.in_flight_order import InFlightOrder, OrderState
 from hummingbot.core.data_type.trade_fee import TokenAmount
 from hummingbot.core.event.event_logger import EventLogger
 from hummingbot.core.event.events import (
@@ -431,7 +432,7 @@ class CoinexExchangeTests(unittest.TestCase):
 
         # Mock API response
         response = {
-            "retCode": 0,
+            "code": 0,
             "message": "OK",
             "data": {
                 "market": self.ex_trading_pair,
@@ -764,11 +765,43 @@ class CoinexExchangeTests(unittest.TestCase):
         self.assertEqual(order.order_type, failure_event.order_type)
 
     @aioresponses()
-    def test_cancel_orders_with_cancel_all(self, mock_api):
-        url = web_utils.rest_url(CONSTANTS.ORDERS_CANCEL_EP)
+    def test_cancel_two_orders_with_cancel_batch_and_one_fails(self, mock_api):
+        url = web_utils.rest_url(CONSTANTS.ORDERS_CANCEL_BATCH_EP)
         self.exchange._set_current_timestamp(TEST_TIMESTAMP_SEC)
         test_order_id = 40236
         test_client_id = "OID4"
+        test_order_id2 = 40237
+        test_client_id2 = "OID5"
+
+        response = {
+            "code": 0,
+            "message": "OK",
+            "data": [{
+                "code": 0,
+                "message": "OK",
+                "data": {
+                    "order_id": test_order_id,
+                    "market": f"{TEST_BASE}{TEST_QUOTE}",
+                    "market_type": "SPOT",
+                    "ccy": f"{TEST_BASE}",
+                    "side": "buy",
+                    "type": "limit",
+                    "price": "10000",
+                    "amount": "100",
+                    "client_id": f"{test_client_id}"
+                }
+            }, {
+                "code": 3610,
+                "message": "Order cancellation error",
+                "data": {
+                    "order_id": test_order_id2,
+                    "market": f"{TEST_BASE}{TEST_QUOTE}",
+                    "market_type": "SPOT",
+                    "client_id": f"{test_client_id2}"
+                }
+            }],
+        }
+        self._setup_post(mock_api, url, response=response)
 
         self.exchange.start_tracking_order(
             order_id=test_client_id,
@@ -779,31 +812,37 @@ class CoinexExchangeTests(unittest.TestCase):
             amount=Decimal("100"),
             order_type=OrderType.LIMIT,
         )
+        self.exchange.start_tracking_order(
+            order_id=test_client_id2,
+            exchange_order_id=test_order_id2,
+            trading_pair=self.trading_pair,
+            trade_type=TradeType.SELL,
+            price=Decimal("10010"),
+            amount=Decimal("110"),
+            order_type=OrderType.LIMIT,
+        )
 
         self.assertIn(test_client_id, self.exchange.in_flight_orders)
-        order = self.exchange.in_flight_orders[test_client_id]
-
-        response = {
-            "code": 0,
-            "message": "OK",
-            "data": {
-                "order_id": test_client_id,
-                "client_id": f"{test_client_id}"
-            },
-        }
-        self._setup_post(mock_api, url, response=response)
+        order1 = self.exchange.in_flight_orders[test_client_id]
+        self.assertIn(test_client_id2, self.exchange.in_flight_orders)
+        order2 = self.exchange.in_flight_orders[test_client_id2]
 
         cancellation_results = self.async_run_with_timeout(self.exchange.cancel_all(10))
 
-        self.assertEqual(1, len(cancellation_results))
+        self.assertEqual(2, len(cancellation_results))
+        self.assertEqual(CancellationResult(order1.client_order_id, True), cancellation_results[0])
+        self.assertEqual(CancellationResult(order2.client_order_id, False), cancellation_results[1])
 
         self.assertEqual(1, len(self.order_cancelled_logger.event_log))
         cancel_event: OrderCancelledEvent = self.order_cancelled_logger.event_log[0]
         self.assertEqual(self.exchange.current_timestamp, cancel_event.timestamp)
-        self.assertEqual(order.client_order_id, cancel_event.order_id)
+        self.assertEqual(order1.client_order_id, cancel_event.order_id)
 
         self.assertTrue(
-            self._is_logged("INFO", f"Successfully canceled order {order.client_order_id}.")
+            self._is_logged("INFO", f"Successfully canceled order {order1.client_order_id}.")
+        )
+        self.assertFalse(
+            self._is_logged("INFO", f"Successfully canceled order {order2.client_order_id}.")
         )
 
     @aioresponses()
@@ -1128,6 +1167,62 @@ class CoinexExchangeTests(unittest.TestCase):
                 "'error_type': 'ValueError'})"
             )
         )
+
+    def test_restore_tracking_states_only_registers_open_orders(self):
+        orders = []
+
+        orders.append(InFlightOrder(
+            client_order_id="OID1",
+            exchange_order_id=40524,
+            trading_pair=self.trading_pair,
+            order_type=OrderType.LIMIT,
+            trade_type=TradeType.BUY,
+            amount=Decimal("1000.1"),
+            price=Decimal("1.0"),
+            creation_timestamp=1640001112.223,
+        ))
+        orders.append(InFlightOrder(
+            client_order_id="OID2",
+            exchange_order_id=40525,
+            trading_pair=self.trading_pair,
+            order_type=OrderType.LIMIT,
+            trade_type=TradeType.BUY,
+            amount=Decimal("1000.2"),
+            price=Decimal("1.0"),
+            creation_timestamp=1640001112.223,
+            initial_state=OrderState.CANCELED
+        ))
+        orders.append(InFlightOrder(
+            client_order_id="OID3",
+            exchange_order_id=40526,
+            trading_pair=self.trading_pair,
+            order_type=OrderType.LIMIT,
+            trade_type=TradeType.BUY,
+            amount=Decimal("1000.3"),
+            price=Decimal("1.0"),
+            creation_timestamp=1640001112.223,
+            initial_state=OrderState.FILLED
+        ))
+        orders.append(InFlightOrder(
+            client_order_id="OID4",
+            exchange_order_id=40527,
+            trading_pair=self.trading_pair,
+            order_type=OrderType.LIMIT,
+            trade_type=TradeType.BUY,
+            amount=Decimal("1000.4"),
+            price=Decimal("1.0"),
+            creation_timestamp=1640001112.223,
+            initial_state=OrderState.FAILED
+        ))
+
+        tracking_states = {order.client_order_id: order.to_json() for order in orders}
+
+        self.exchange.restore_tracking_states(tracking_states)
+
+        self.assertIn("OID1", self.exchange.in_flight_orders)
+        self.assertNotIn("OID2", self.exchange.in_flight_orders)
+        self.assertNotIn("OID3", self.exchange.in_flight_orders)
+        self.assertNotIn("OID4", self.exchange.in_flight_orders)
 
     # endregion TST_ORDERS
 

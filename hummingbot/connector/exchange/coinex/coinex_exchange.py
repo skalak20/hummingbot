@@ -3,6 +3,7 @@ import logging
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
+from async_timeout import timeout
 from bidict import bidict
 
 from hummingbot.connector.constants import s_decimal_NaN
@@ -18,11 +19,13 @@ from hummingbot.connector.exchange_py_base import ExchangePyBase
 from hummingbot.connector.trading_rule import TradingRule
 from hummingbot.connector.utils import combine_to_hb_trading_pair, split_hb_trading_pair
 from hummingbot.core.api_throttler.data_types import RateLimit
+from hummingbot.core.data_type.cancellation_result import CancellationResult
 from hummingbot.core.data_type.common import OrderType, TradeType
-from hummingbot.core.data_type.in_flight_order import InFlightOrder, OrderUpdate, TradeUpdate
+from hummingbot.core.data_type.in_flight_order import InFlightOrder, OrderState, OrderUpdate, TradeUpdate
 from hummingbot.core.data_type.order_book_tracker_data_source import OrderBookTrackerDataSource
 from hummingbot.core.data_type.trade_fee import AddedToCostTradeFee
 from hummingbot.core.data_type.user_stream_tracker_data_source import UserStreamTrackerDataSource
+from hummingbot.core.utils.async_utils import safe_gather
 from hummingbot.core.utils.estimate_fee import build_trade_fee
 from hummingbot.core.web_assistant.auth import AuthBase
 from hummingbot.core.web_assistant.web_assistants_factory import WebAssistantsFactory
@@ -206,11 +209,11 @@ class CoinexExchange(ExchangePyBase):
         exchange_order_id = await tracked_order.get_exchange_order_id()
         # exchange_order_id = tracked_order.exchange_order_id
         if exchange_order_id is None:
-            return await self._place_cancel_by_client_id(exchange_symbol, tracked_order.client_order_id, tracked_order)
+            return await self.__place_cancel_by_client_id(exchange_symbol, tracked_order.client_order_id, tracked_order)
         else:
-            return await self._place_cancel_by_order_id(exchange_symbol, exchange_order_id)
+            return await self.__place_cancel_by_order_id(exchange_symbol, exchange_order_id)
 
-    async def _place_cancel_by_client_id(self, exchange_symbol, client_order_id) -> bool:
+    async def __place_cancel_by_client_id(self, exchange_symbol, client_order_id) -> bool:
         api_params = {
             "market": exchange_symbol,
             "market_type": "SPOT",
@@ -232,7 +235,7 @@ class CoinexExchange(ExchangePyBase):
 
         return False
 
-    async def _place_cancel_by_order_id(self, exchange_symbol, exchange_order_id) -> bool:
+    async def __place_cancel_by_order_id(self, exchange_symbol, exchange_order_id) -> bool:
         api_params = {
             "market": exchange_symbol,
             "market_type": "SPOT",
@@ -251,6 +254,95 @@ class CoinexExchange(ExchangePyBase):
             return cancel_result["data"]["order_id"] == exchange_order_id
 
         return False
+
+    async def __batch_cancel_orders(self, market: str, orderIds: List):
+        api_params = {
+            "market": market,
+            "order_ids": orderIds,
+        }
+        cancel_result = await self._api_post(
+            path_url=CONSTANTS.ORDERS_CANCEL_BATCH_EP,
+            data=api_params,
+            is_auth_required=True)
+        return cancel_result
+
+    def __process_cancels_update(self, trading_pair, exchange_order_id, client_order_id):
+        order_update: OrderUpdate = OrderUpdate(
+            trading_pair=trading_pair,
+            update_timestamp=self.current_timestamp,
+            new_state=(OrderState.CANCELED
+                        if self.is_cancel_request_in_exchange_synchronous
+                        else OrderState.PENDING_CANCEL),
+            client_order_id=client_order_id,
+            exchange_order_id=exchange_order_id,
+        )
+        self._order_tracker.process_order_update(order_update)
+
+    async def cancel_all(self, timeout_seconds: float) -> List[CancellationResult]:
+        """
+        Cancels all currently active orders. The cancellations are performed in parallel tasks.
+
+        :param timeout_seconds: the maximum time (in seconds) the cancel logic should run
+        :return: a list of CancellationResult instances, one for each of the orders to be cancelled
+        """
+        async def execute_batch_cancel(market: str, order_ids: List) -> List[str]:
+            """
+            Requests the exchange to cancel batch an active orders
+
+            :param market: the trading pair of the orders to cancel
+            :param order_ids: the client id of the orders to cancel
+            """
+            tracked_orders = [(o[0], t) for o in order_ids if (t := self._order_tracker.fetch_tracked_order(o[1]))]
+            result = await self.__batch_cancel_orders(market, [t[0] for t in tracked_orders if t[1] is not None])
+            return result
+
+        ordersToCancelByMarket: Dict[str, List[List[InFlightOrder]]] = {}
+
+        incomplete_orders = [o for o in self.in_flight_orders.values() if not o.is_done]
+        for order in incomplete_orders:
+            if order.trading_pair in ordersToCancelByMarket:
+                ordersToCancel = ordersToCancelByMarket[order.trading_pair]
+                lastIndex = len(ordersToCancel) - 1
+                if len(ordersToCancel[lastIndex]) < CONSTANTS.ORDERS_CANCEL_BATCH_MAX:
+                    ordersToCancel[lastIndex].append(order)
+                else:
+                    ordersToCancel.append([order])
+            else:
+                ordersToCancelByMarket[order.trading_pair] = [[order]]
+
+        tasks = [
+            execute_batch_cancel(k, [(o.exchange_order_id, o.client_order_id) for o in os])
+            for k, v in ordersToCancelByMarket.items()
+            for os in v
+        ]
+
+        successful_cancellations = []
+        order_id_set = {o.client_order_id for o in incomplete_orders}
+
+        try:
+            async with timeout(timeout_seconds):
+                cancellation_results = await safe_gather(*tasks, return_exceptions=True)
+                for result in cancellation_results:
+                    if isinstance(result, Exception) or result["code"] != 0:
+                        continue
+                    for canceled_order_result in result["data"]:
+                        if canceled_order_result is not None and canceled_order_result["code"] == 0:
+                            exchange_symbol = canceled_order_result["data"]["market"]
+                            trading_pair = await self.trading_pair_associated_to_exchange_symbol(exchange_symbol)
+                            exchange_order_id = canceled_order_result["data"]["order_id"]
+                            client_order_id = canceled_order_result["data"]["client_id"]
+                            order_id_set.remove(client_order_id)
+                            successful_cancellations.append(CancellationResult(client_order_id, True))
+                            self.__process_cancels_update(trading_pair, exchange_order_id, client_order_id)
+        except Exception as ex:
+            self.logger().network(
+                "Unexpected error cancelling orders.",
+                exc_info=True,
+                app_warning_msg=f"Failed to cancel order. Check API key and network connection. {ex}"
+            )
+
+        failed_cancellations = [CancellationResult(oid, False) for oid in order_id_set]
+        return successful_cancellations + failed_cancellations
 
     async def _place_order(self,
                            order_id: str,
